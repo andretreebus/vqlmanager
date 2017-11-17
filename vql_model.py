@@ -173,17 +173,16 @@ class VqlModel(QTreeWidget):
             if not chapter.is_selected():
                 continue
 
-            if mode & VqlModel.SELECT:
+            if mode & Vql.SELECT:
                 yield True, chapter
                 for code_item in chapter.code_items:
                     if code_item.is_selected():
                         yield False, code_item
-            elif mode & VqlModel.COMPARE:
+            elif mode & Vql.COMPARE:
                 items = list()
                 for code_item in chapter.code_items:
-                    if code_item.is_selected():
-                        if not code_item.get_color() == Vql.WHITE:
-                            items.append(code_item)
+                    if code_item.is_selected() and not code_item.get_color() == Vql.WHITE:
+                        items.append(code_item)
                 if items:
                     yield True, chapter
                     for item in items:
@@ -200,11 +199,11 @@ class VqlModel(QTreeWidget):
         """
 
         length = len(file_content)
-        if mode & VqlModel.SELECT:
+        if mode & Vql.SELECT:
             self.changed = False
             self.tree_reset()
             # self.setHeaderLabel('Selection')
-        elif mode & VqlModel.COMPARE:
+        elif mode & Vql.COMPARE:
             self.tree_reset_compare()
             self.new_objects = list()
             self.to_add = list()
@@ -220,15 +219,15 @@ class VqlModel(QTreeWidget):
                          if start[1] > 0]
 
         for chapter_name, chapter_part in chapter_parts:
-            object_codes = [VqlModel.DELIMITER + code for code in chapter_part.split(VqlModel.DELIMITER)[1:]]
+            object_codes = [Vql.DELIMITER + code for code in chapter_part.split(Vql.DELIMITER)[1:]]
             object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
             for object_name, object_code in object_code:
-                if mode == VqlModel.SELECT:
+                if mode & Vql.SELECT:
                     self.add_code_part(chapter_name, object_name, object_code, Vql.WHITE)
-                else:
+                elif mode & Vql.COMPARE:
                     self.add_compared_part(chapter_name, object_name, object_code)
 
-        if mode == VqlModel.COMPARE:
+        if mode & Vql.COMPARE:
             self.check_deleted_items()
             for chapter_name, object_name, object_code, color in self.to_add:
                 self.add_code_part(chapter_name, object_name, object_code, color)
@@ -294,7 +293,7 @@ class VqlModel(QTreeWidget):
         self.root = self.invisibleRootItem()
         self.clear()
         # initialize by adding empty chapters
-        self._add_chapters(VqlModel.CHAPTER_NAMES)
+        self._add_chapters(Vql.CHAPTER_NAMES)
 
         # base_folder for storing as a repository
         self.set_base_folder('')
