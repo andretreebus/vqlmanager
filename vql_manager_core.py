@@ -26,8 +26,7 @@ class VQL_Constants(object):
     # Hint for the width of the tree wigets
     PANE_WIDTH = 300
 
-    # application modes
-    # modes
+    # application modes en flags
     SELECT = 1 << 1
     COMPARE = 1 << 2
     BASE_MODEL_FILE = 1 << 3
@@ -36,6 +35,8 @@ class VQL_Constants(object):
     COMP_MODEL_REPO = 1 << 6
     BASE_MODEL_LOADED = 1 << 7
     COMP_MODEL_LOADED = 1 << 8
+    FILE = 1 << 9
+    REPO = 1 << 10
 
     # colors used
     RED = QBrush(QColor("#ff4444"))

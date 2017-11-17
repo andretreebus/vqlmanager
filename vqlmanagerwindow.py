@@ -13,7 +13,7 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
 
-from os import path, remove, makedirs, listdir, unlink
+from os import path, makedirs, listdir, unlink
 from shutil import rmtree
 
 from PyQt5.QtCore import Qt, QSize, QRect, QFileInfo, QTimer
@@ -31,7 +31,6 @@ class VQLManagerWindow(QMainWindow):
     """
     Main application class for the GUI.
    """
-
     def __init__(self, parent=None):
         """
         Constructor of the Window Class
@@ -46,29 +45,26 @@ class VQLManagerWindow(QMainWindow):
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
 
-        # initialize mainwidget and layout
+        # instanciate widgets
         self.mainwidget = QWidget(self, flags=Qt.Widget)
         self.layout = QGridLayout(self.mainwidget)
         self.all_chapters_treeview = QTreeWidget(self.mainwidget)
         self.selected_treeview = QTreeWidget(self.mainwidget)
         self.command_text_edit_label = QLabel(self.mainwidget)
+
         self.mode_label = QLabel(self.mainwidget)
-        self.base_model_path_label = QLabel(self.mainwidget)
-        self.compare_model_path_label = QLabel(self.mainwidget)
+        self.base_repository_label = QLabel(self.mainwidget)
+        self.compare_repository_label = QLabel(self.mainwidget)
+
         self.selection_viewer_label = QLabel(self.mainwidget)
         self.command_txtEdit = QTextEdit(self.mainwidget)
         self.statusBar = QStatusBar(self)
 
         #  Actions and Menubar ###############################################################################
-        # Open File
         self.open_file_action = QAction(QIcon(self._root + '/images/open_file.png'), '&Open File', self)
-        # Open Repository
         self.open_folder_action = QAction(QIcon(self._root + '/images/open_repo.png'), 'Open &Repository', self)
-        # Save As File
         self.export_file_action = QAction(QIcon(self._root + '/images/save_file.png'), 'Save As File', self)
-        # Save As Repository
         self.export_folder_action = QAction(QIcon(self._root + '/images/save_repo.png'), '&Save As Repository', self)
-        # Exit App
         self.exit_action = QAction(QIcon(self._root + '/images/exit.png'), '&Exit', self)
 
         # Add/Construct menus
@@ -77,26 +73,36 @@ class VQLManagerWindow(QMainWindow):
         self.tool_menu = self.menubar.addMenu('&Tools')
 
         # Compare with File
-        self.open_file2_action = QAction(QIcon(self._root + '/images/open_file.png'), '&Open File to Compare', self)
+        self.open_compare_file_action = QAction(QIcon(self._root + '/images/open_file.png'),
+                                                '&Open File to Compare', self)
         # Compare with Folder
-        self.open_folder2_action = QAction(QIcon(self._root + '/images/open_repo.png'),
-                                           'Open &Repository to Compare', self)
+        self.open_compare_folder_action = QAction(QIcon(self._root + '/images/open_repo.png'),
+                                                  'Open &Repository to Compare', self)
         # Reset everything
         self.reset_action = QAction(QIcon(self._root + '/images/reset.png'), 'Reset &Everything', self)
 
         #  Menu
         self.menubar = QMenuBar(self)
         self.update_timer = QTimer()
+
+        # Format and setup all widgets
         self.setup_ui()
 
         # Initialize class properties ###########################################################################
-        self.mode = VQL.SELECT | VQL.BASE_MODEL_FILE
-        self._vql_file = ''
-        self.compare_file = ''
-        self._repository = ''
-        self.compare_repository = ''
-        self.model_loaded = False
-        self.model2_loaded = False
+
+        self.base_repository_file = ''
+        self.base_repository_folder = ''
+
+        self.compare_repository_file = ''
+        self.compare_repository_folder = ''
+
+        self._mode = 0
+        self.switch_to_mode(0)
+
+    @staticmethod
+    def set_size(some_widget):
+        some_widget.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
+        some_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def setup_ui(self):
         self.resize(1200, 800)
@@ -120,8 +126,7 @@ class VQLManagerWindow(QMainWindow):
         # self.all_chapters_treeview.setToolTipDuration(2000)
         self.all_chapters_treeview.setIconSize(QSize(16, 16))
         self.all_chapters_treeview.setColumnCount(1)
-        self.all_chapters_treeview.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.all_chapters_treeview.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.set_size(self.all_chapters_treeview)
 
         self.selected_treeview = QTreeWidget(self.mainwidget)
         self.selected_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -130,30 +135,19 @@ class VQLManagerWindow(QMainWindow):
         self.selected_treeview.setHeaderLabel('Selection Pane')
         self.selected_treeview.setToolTip("Selected parts: Click to view source code")
         self.selected_treeview.setToolTipDuration(2000)
-        self.selected_treeview.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.selected_treeview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.selected_treeview.setIconSize(QSize(16, 16))
         self.selected_treeview.setColumnCount(1)
+        self.set_size(self.selected_treeview)
+
+        # self.selected_treeview.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
+        # self.selected_treeview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.command_text_edit_label.setText("Command:")
-        self.command_text_edit_label.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.command_text_edit_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        self.mode_label.setText("View Mode: Selection")
-        self.mode_label.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.mode_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        self.base_model_path_label.setText("File: base model")
-        self.base_model_path_label.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.base_model_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        self.compare_model_path_label.setText("File: compare model")
-        self.compare_model_path_label.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.compare_model_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        self.selection_viewer_label.setText("selview")
-        self.selection_viewer_label.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.selection_viewer_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.set_size(self.command_text_edit_label)
+        self.set_size(self.mode_label)
+        self.set_size(self.selection_viewer_label)
+        self.set_size(self.compare_repository_label)
+        self.set_size(self.base_repository_label)
 
         self.command_txtEdit.setAcceptRichText(False)
         self.command_txtEdit.setLineWrapMode(0)
@@ -161,14 +155,13 @@ class VQLManagerWindow(QMainWindow):
         self.command_txtEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.command_txtEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.command_txtEdit.setText("non selected")
-        self.command_txtEdit.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.command_txtEdit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.set_size(self.command_txtEdit)
 
         #  Layout ################################################################################
         # left pane
         self.layout.addWidget(self.mode_label,                0, 0, 1, 1)
-        self.layout.addWidget(self.base_model_path_label,     1, 0, 1, 1)
-        self.layout.addWidget(self.compare_model_path_label,  2, 0, 1, 1)
+        self.layout.addWidget(self.base_repository_label, 1, 0, 1, 1)
+        self.layout.addWidget(self.compare_repository_label, 2, 0, 1, 1)
         self.layout.addWidget(self.all_chapters_treeview,     3, 0, 3, 1)
 
         # right pane
@@ -199,21 +192,21 @@ class VQLManagerWindow(QMainWindow):
         # Open File
         self.open_file_action.setShortcut('Ctrl+O')
         self.open_file_action.setStatusTip('Open Single VQL File')
-        self.open_file_action.triggered.connect(self.on_file_open)
+        self.open_file_action.triggered.connect(lambda: self.on_open(VQL.SELECT & VQL.BASE_MODEL_FILE))
 
         # Open Repository
         self.open_folder_action.setShortcut('Ctrl+R')
         self.open_folder_action.setStatusTip('Open a repository containing folders with separate vql scripts')
-        self.open_folder_action.triggered.connect(self.on_repository_open)
+        self.open_folder_action.triggered.connect(lambda: self.on_open(VQL.SELECT & VQL.BASE_MODEL_REPO))
 
         # Save As File
-        self.export_file_action.setStatusTip('Save selection to a repository folder')
-        self.export_file_action.triggered.connect(self.on_save_to_file)
+        self.export_file_action.setStatusTip('Save selection to a repository file')
+        self.export_file_action.triggered.connect(lambda: self.on_save(VQL.FILE))
 
         # Save As Repository
         self.export_folder_action.setShortcut('Ctrl+S')
         self.export_folder_action.setStatusTip('Save selection to a repository folder')
-        self.export_folder_action.triggered.connect(self.on_save_to_repository)
+        self.export_folder_action.triggered.connect(lambda: self.on_save(VQL.REPO))
 
         # Exit App
         self.exit_action.setShortcut('Ctrl+Q')
@@ -221,14 +214,16 @@ class VQLManagerWindow(QMainWindow):
         self.exit_action.triggered.connect(QApplication.quit)
 
         # Compare with File
-        self.open_file2_action.setShortcut('Ctrl+O')
-        self.open_file2_action.setStatusTip('Open Single VQL File')
-        self.open_file2_action.triggered.connect(self.on_file2_open)
+        self.open_compare_file_action.setShortcut('Ctrl+O')
+        self.open_compare_file_action.setStatusTip('Open Single VQL File')
+        self.open_compare_file_action.triggered.connect(
+            lambda: self.on_open(VQL.COMPARE & VQL.COMP_MODEL_FILE))
 
         # Compare with Folder
-        self.open_folder2_action.setShortcut('Ctrl+R')
-        self.open_folder2_action.setStatusTip('Open a repository containing folders with separate vql scripts')
-        self.open_folder2_action.triggered.connect(self.on_repository2_open)
+        self.open_compare_folder_action.setShortcut('Ctrl+R')
+        self.open_compare_folder_action.setStatusTip('Open a repository containing folders with separate vql scripts')
+        self.open_compare_folder_action.triggered.connect(
+            lambda: self.on_open(VQL.COMPARE & VQL.COMP_MODEL_REPO))
 
         # Reset everything
         # self.reset_action.setShortcut('Ctrl+E')
@@ -247,8 +242,8 @@ class VQLManagerWindow(QMainWindow):
         self.filemenu.addSeparator()
         self.filemenu.addAction(self.exit_action)
 
-        self.tool_menu.addAction(self.open_file2_action)
-        self.tool_menu.addAction(self.open_folder2_action)
+        self.tool_menu.addAction(self.open_compare_file_action)
+        self.tool_menu.addAction(self.open_compare_folder_action)
         self.tool_menu.addSeparator()
         self.tool_menu.addAction(self.reset_action)
 
@@ -256,159 +251,126 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
         self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
 
-        self.update_timer.timeout.connect(self.update_selected_treeview)
+        self.update_timer.timeout.connect(self.update_tree_widgets)
 
-    @property
-    def repository_base_folder(self):
-        """
-        This method runs whenever you try to get chapter_folder
-        chapter_folder is the base folder of a code repository (collection of files in folders)
-        :return: _chapter_folder instance property
-        :rtype: str
-        """
-        return self._repository
+    def get_mode(self):
+        return self._mode
 
-    @repository_base_folder.setter
-    def repository_base_folder(self, folder_name):
+    def switch_to_mode(self, mode):
         """
-        This method runs whenever you try to set chapter_folder
-        chapter_folder is the base folder of a code repository (collection of files in folders)
-        :return: nothing
-        """
-        self._repository = folder_name
-        if self.mode == VQL.SELECT:
-            self.all_chapters_treeview.setHeaderLabel('Repository: ' + folder_name)
-        else:
-            self.all_chapters_treeview.setHeaderLabel('Diff: ' + folder_name)
+        This function redresses the window to reflect the new mode
 
-    @property
-    def vql_file(self):
+        :param mode:
+        :return:
         """
-        This method runs whenever you try to get vql_file (getter)
-        :return: __vql_file instance property
-        :rtype: str
-        """
-        return self._vql_file
 
-    @vql_file.setter
-    def vql_file(self, file_name):
-        """
-        This method runs whenever you try to set vql_file
-        :return: nothing
-        """
-        self._vql_file = file_name
-        self.all_chapters_treeview.setHeaderLabel('File: ' + file_name)
+        if not mode:
+            self.mode_label = 'View Mode: Selection'
+            self.base_repository_label = 'No file loaded'
+            self.compare_repository_label = ''
+            self.all_chapters_treeview.setHeaderLabel('Schatje')
 
-    def window_switch_to_mode(self):
-        if self.mode & VQL.SELECT:
+        if mode & VQL.SELECT:
             self.mode_label.setText("View Mode: Selection")
-            self.compare_model_path_label.setText = ''
-            self.base_model_path_label.setText = 'File : ' + self.base_model_path
-        elif self.mode & VQL.COMPARE:
-            self.mode_label.setText("View Mode: Selection")
-            self.compare_model_path_label.setText = 'Compared with: ' + self.compare_model_path
+            if mode & VQL.BASE_MODEL_FILE:
+                self.base_repository_label.setText = 'File : ' + self.base_repository_file
+            elif mode & VQL.BASE_MODEL_REPO:
+                self.base_repository_label.setText = 'Repository : ' + self.base_repository_file
+            self.compare_repository_label.setText = ''
+
+        elif mode & VQL.COMPARE:
+            self.mode_label.setText("View Mode: Compare")
+            if mode & VQL.COMP_MODEL_FILE:
+                self.compare_repository_label.setText = 'File : ' + self.compare_repository_file
+            elif mode & VQL.COMP_MODEL_REPO:
+                self.compare_repository_label.setText = 'Repository : ' + self.compare_repository_folder
+
+        self._mode = mode
 
     # Event handlers for opening and saving models
-    def on_file_open(self):
+
+    def on_open(self, new_mode):
         """
         Callback for the Open File menu item
         this function is the starting point for loading a model based on a .vql file
         :return: nothing
         """
 
-        if self.model_loaded:
-            if self.ask_drop_changes():
-                self.model_loaded = False
-                self.on_file_open()
-        else:
-            if self.ask_file_open():
-                self.load_model_from_file()
-                self.model_loaded = True
+        current_mode = self.get_mode()
+        model_loaded = VQL.BASE_MODEL_FILE | VQL.BASE_MODEL_REPO | VQL.COMP_MODEL_FILE | VQL.COMP_MODEL_REPO
+        compare_loaded = VQL.COMP_MODEL_FILE | VQL.COMP_MODEL_REPO
 
-    def on_file2_open(self):
-        """
-        Callback for the Open File menu item
-        this function is the starting point for loading a model based on a .vql file
-        :return: nothing
-        """
-
-        if self.model_loaded:
-            if self.model2_loaded:
+        if new_mode & VQL.SELECT:
+            if current_mode & model_loaded:
+                # some base model is open:
                 if self.ask_drop_changes():
-                    self.model2_loaded = False
-                    self.on_file2_open()
+                    current_mode = current_mode & ~model_loaded
+                    self.self.switch_to_mode(current_mode)
+                    self.all_chapters_treeview.tree_reset()
+                    self.update_tree_widgets()
+                    self.on_open(new_mode)  # recurse to the begin
+            else:  # ok we can load
+
+                if current_mode & VQL.BASE_MODEL_FILE:
+                    file = self.ask_file_open()
+                    if file:
+                        self.switch_to_mode(VQL.SELECT | VQL.BASE_MODEL_FILE)
+                        if self.load_model_from_file(file):
+                            self.switch_to_mode(VQL.SELECT | VQL.BASE_MODEL_FILE | VQL.BASE_MODEL_LOADED)
+
+                elif current_mode & VQL.BASE_MODEL_REPO:
+                    folder = self.ask_repository_open()
+                    if folder:
+                        self.switch_to_mode(VQL.SELECT | VQL.BASE_MODEL_REPO)
+                        if self.load_model_from_repository(folder):
+                            self.switch_to_mode(VQL.SELECT | VQL.BASE_MODEL_REPO | VQL.BASE_MODEL_LOADED)
+
+        elif new_mode & VQL.COMPARE:
+            if current_mode & (VQL.BASE_MODEL_FILE | VQL.BASE_MODEL_REPO):  # there is a base model
+                if current_mode & compare_loaded:  # there is a compare going on
+                    if self.ask_drop_changes():
+                        current_mode = current_mode & ~compare_loaded
+                        self.self.switch_to_mode(current_mode)
+                        self.all_chapters_treeview.tree_reset_compare()
+                        self.update_tree_widgets()
+                        self.on_open(new_mode)  # recurse to the begin
+                else:  # ok we can load
+
+                    if new_mode & VQL.COMP_MODEL_FILE:
+                        file = self.ask_file_open()
+                        if file:
+                            self.switch_to_mode(VQL.COMPARE | VQL.COMP_MODEL_FILE)
+                            if self.load_model_from_file(file):
+                                self.switch_to_mode(VQL.COMPARE | VQL.COMP_MODEL_FILE | VQL.COMP_MODEL_LOADED)
+
+                    elif new_mode & VQL.COMP_MODEL_REPO:
+                        folder = self.ask_repository_open()
+                        if folder:
+                            self.switch_to_mode(VQL.COMPARE | VQL.COMP_MODEL_REPO)
+                            if self.load_model_from_repository(folder):
+                                self.switch_to_mode(VQL.COMPARE | VQL.COMP_MODEL_REPO | VQL.COMP_MODEL_LOADED)
             else:
-                self.mode = VQL.COMPARE
-                if self.ask_file_open():
-                    self.load_model_from_file()
-                    self.model2_loaded = True
-                else:
-                    self.mode = VQL.SELECT
-        else:
-            self.message_to_user("No repository loaded yet")
+                self.message_to_user("No repository loaded yet")
 
-    def on_repository_open(self):
-        """
-        Callback for the Open Folder menu item
-        this function is the starting point for loading a model based on a .vql file
-        :return: nothing
-        """
-
-        if not self.model_loaded:
-            if self.ask_repository_open():
-                self.load_model_from_repository()
-                self.model_loaded = True
-        else:
-            if self.ask_drop_changes():
-                self.all_chapters_treeview.tree_reset()
-                self.model_loaded = False
-                self.on_repository_open()
-
-    def on_repository2_open(self):
-        """
-        Callback for the Open Folder menu item
-        this function is the starting point for loading a model based on a .vql file
-        :return: nothing
-        """
-        if self.model_loaded:
-            if self.model2_loaded:
-                if self.ask_drop_changes():
-                    self.all_chapters_treeview.tree2_reset()
-                    self.model2_loaded = False
-                    self.on_repository2_open()
-            else:
-                self.mode = VQL.COMPARE
-                if self.ask_repository_open():
-                    self.load_model_from_repository()
-                    self.model2_loaded = True
-                else:
-                    self.mode = VQL.SELECT
-        else:
-            self.message_to_user("No repository loaded yet")
-
-    def on_save_to_file(self):
+    def on_save(self, save_mode):
         """
         Callback for the Save to File menu item
         this function is the starting point for saving a model to a .vql file
         :return: nothing
         """
-        if self.model_loaded:
-            if self.ask_file_save():
-                self.save_model_to_file()
-        else:
-            self.message_to_user("No repository loaded yet")
 
-    def on_save_to_repository(self):
-        """
-        Callback for the Save to Folder (Repository) File menu
-        this function is the starting point for saving a model to a repository folder structure
-        :return: nothing
-        """
-        if self.model_loaded:
-            if self.ask_repository_save():
-                self.save_model_to_repository()
-        else:
+        if not self.get_mode() & VQL.BASE_MODEL_LOADED:
             self.message_to_user("No repository loaded yet")
+            return
+
+        if save_mode & VQL.FILE:
+            file = self.ask_file_save()
+            if file:
+                self.save_model_to_file()
+        elif save_mode & VQL.REPO:
+            folder = self.ask_repository_save()
+            if folder:
+                self.save_model_to_repository()
 
     def on_reset(self):
         """
@@ -416,10 +378,8 @@ class VQLManagerWindow(QMainWindow):
         :return: nothing
         """
         self.all_chapters_treeview.tree_reset()
-        self.update_selected_treeview()
-        self.model_loaded = False
-        if self.model2_loaded:
-            self.all_chapters_treeview.tree2_reset()
+        self.all_chapters_treeview.tree_reset_compare()
+        self.update_tree_widgets()
 
     def on_selection_changed(self, item, *_):
         """
@@ -452,26 +412,67 @@ class VQLManagerWindow(QMainWindow):
                 self.command_txtEdit.setText(command)
                 self.command_text_edit_label.setText("Command: " + file_name)
 
+    def ask_file_open(self):
+        """
+        Function to ask which file to open to via a dialog
+        it also checks if the file exists and has a .vql extension
+        :return: filepath
+        :rtype: str
+        """
+
+        dialog = QFileDialog(self)
+        dialog.setAcceptMode(dialog.AcceptOpen)
+        dialog.setDefaultSuffix('vql')
+        dialog.setWindowTitle("Select single VQL file")
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        dialog.setViewMode(QFileDialog.Detail)
+        filename, _ = dialog.getOpenFileName(self, "Save File", path.curdir,
+                                             "Denodo Scripts (*.vql);;Text files (*.txt);;All files (*)",
+                                             options=QFileDialog.DontResolveSymlinks)
+        if not filename:
+            return ''
+        filename = str(filename)
+
+        if not path.isfile(filename):
+            self.message_to_user("File does not exist")
+            return ''
+
+        if not filename[-4:] == '.vql':
+            self.message_to_user("This file has the wrong extenion")
+            return ''
+
+        return filename
+
     def ask_repository_open(self):
         """
         Function to ask which folder to open via a dialog
         it also checks if all files mentioned in the part.log files exist
-        :return: Boolean if success; chapter_folder is set
-        :rtype: bool
+        :return: the folder path
+        :rtype: str
         """
 
-        folder = self.ask_folder()
-        possible_folders = [name.replace(' ', '_') for name in self.all_chapters_treeview.CHAPTER_NAMES]
+        dialog = QFileDialog(self)
+        dialog.setAcceptMode(dialog.AcceptOpen)
+        dialog.setWindowTitle("Select Folder")
+        dialog.setViewMode(QFileDialog.List)
+        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        folder = dialog.getExistingDirectory(self, "Open Directory", path.curdir)
+
         if not folder:
-            return False
+            return ''
+
+        folder = str(folder)
 
         if not path.isdir(folder):
-            return False
+            self.message_to_user("No folder found")
+            return ''
 
+        possible_folders = [name.replace(' ', '_') for name in self.all_chapters_treeview.CHAPTER_NAMES]
         matching_folders = set(possible_folders) & set(listdir(folder))
 
         if len(matching_folders) == 0:
-            return False
+            self.message_to_user("No sub folders found")
+            return ''
 
         part_logger = ''
         for sub_folder in matching_folders:
@@ -482,37 +483,14 @@ class VQLManagerWindow(QMainWindow):
             else:
                 self.message_to_user("File: " + file_to_check +
                                      " not found. Make sure your repository is not corrupt")
-                return False
+                return ''
 
         for file_to_check in part_logger[:-1].split('\n'):
             if not path.isfile(file_to_check):
                 self.message_to_user("File: " + file_to_check +
                                      " not found. Make sure your repository is not corrupt")
-                return False
-
-        if self.mode == VqlModel.SELECT:
-            self.repository_base_folder = folder
-        else:
-            self.compare_repository = folder
-        return True
-
-    def ask_folder(self):
-        """
-        General function to ask a folder to open via a dialog
-        :return: the requested folder path
-        :rtype: str
-        """
-        result = None
-        dialog = QFileDialog(self)
-        dialog.setAcceptMode(dialog.AcceptOpen)
-        dialog.setWindowTitle("Select Folder")
-        dialog.setViewMode(QFileDialog.List)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        folder = dialog.getExistingDirectory(self, "Open Directory", path.curdir)
-        folder = str(folder)
-        if len(folder) > 0:
-            result = str(folder)
-        return result
+                return ''
+        return folder
 
     def ask_repository_save(self):
         """
@@ -521,28 +499,33 @@ class VQLManagerWindow(QMainWindow):
         :return: Boolean if success: chapter_folder is set
         :rtype: bool
         """
-        ok = False
-        folder = self.ask_folder()
-        if folder:
-            if path.isdir(folder):
-                if listdir(folder):
-                    if self.ask_overwrite():
-                        self.clear_export_folder(folder)
-                        ok = True
-                else:
-                    ok = True
+        dialog = QFileDialog(self)
+        dialog.setAcceptMode(dialog.AcceptSave)
+        # dialog.setDefaultSuffix('vql')
+        # dialog.setWindowTitle("Select single VQL file")
+        dialog.setFileMode(QFileDialog.Directory)
+        # dialog.setViewMode(QFileDialog.Detail)
+        folder = dialog.getSaveFileName(self, "Save to Repository", path.curdir)
+
+        # folder = self.ask_folder()
+
+        if not folder:
+            return ''
+
+        if not path.isdir(folder):
+            try:
+                makedirs(folder)
+                return folder
+            except OSError as e:
+                self.error_message_box('Error', 'Error creating folder', e)
+                return ''
+
+        if listdir(folder):
+            if self.ask_overwrite():
+                self.clear_export_folder(folder)
+                return folder
             else:
-                try:
-                    makedirs(folder)
-                    ok = True
-                except OSError as e:
-                    self.error_message_box('Error', 'Error creating folder', e)
-                    ok = False
-            if ok:
-                self.repository_base_folder = folder
-        else:
-            ok = False
-        return ok
+                return ''
 
     def ask_file_save(self):
         """
@@ -554,59 +537,28 @@ class VQLManagerWindow(QMainWindow):
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptSave)
         dialog.setDefaultSuffix('vql')
-        dialog.setWindowTitle("Select single VQL file")
+        # dialog.setWindowTitle("Save File")
         dialog.setFileMode(QFileDialog.AnyFile)
-        dialog.setViewMode(QFileDialog.Detail)
+        # dialog.setViewMode(QFileDialog.Detail)
         filename, _ = dialog.getSaveFileName(self, "Save File", path.curdir,
                                              "Denodo Scripts (*.vql);;Text files (*.txt);;All files (*)")
 
-        if len(filename) > 0:  # not cancel pressed
-            filename = str(filename)
+        if not filename:  # not cancel pressed
+            return ''
 
-            if not ('.' in filename):
-                filename = filename + '.vql'
+        filename = str(filename)
 
-            if path.isfile(filename):
-                if self.ask_overwrite():
-                    self.vql_file = filename
-                    return True
-                else:
-                    return False
+        if not ('.' in filename):
+            filename = filename + '.vql'
+
+        if path.isfile(filename):
+            if self.ask_overwrite():
+                unlink(filename)
+                return filename
             else:
-                self.vql_file = filename
-                return True
+                return ''
         else:
-            return False
-
-    def ask_file_open(self):
-        """
-        Function to ask which file to open to via a dialog
-        it also checks if the file exists and has a .vql extension
-        :return: Boolean if success; vql_file is set
-        :rtype: bool
-        """
-        dialog = QFileDialog(self)
-        dialog.setAcceptMode(dialog.AcceptOpen)
-        dialog.setDefaultSuffix('vql')
-        dialog.setWindowTitle("Select single VQL file")
-        dialog.setFileMode(QFileDialog.ExistingFile)
-        dialog.setViewMode(QFileDialog.Detail)
-        filename, _ = dialog.getOpenFileName(self,  "Save File", path.curdir,
-                                             "Denodo Scripts (*.vql);;Text files (*.txt);;All files (*)",
-                                             options=QFileDialog.DontResolveSymlinks)
-        if not len(filename) == 0:
-            filename = str(filename)
-
-            if path.isfile(filename) and filename[-4:] == '.vql':
-                if self.mode == VQL.SELECT:
-                    self.vql_file = filename
-                elif self.mode == VQL.COMPARE:
-                    self.compare_file = filename
-                return True
-            else:
-                return False
-        else:
-            return False
+            return filename
 
     def message_to_user(self, message):
         """
@@ -699,33 +651,88 @@ class VQLManagerWindow(QMainWindow):
                     rmtree(file_path)
             except OSError as e:
                 self.error_message_box("Error", "An error occurred during the removal of files in the folder: "
-                                       + self.repository_base_folder, e)
+                                       + self.base_repository_folder, e)
 
-    def save_model_to_file(self):
+    def save_model_to_file(self, file):
         """
         Function to save the single .vql file
         :return: Boolean on success
         :rtype: bool
         """
-        ok = False
         self.statusBar.showMessage("Saving")
         tree = self.all_chapters_treeview
-        tree.blockSignals(True)
-        if path.isfile(self.vql_file):
+        if path.isfile(file):
             try:
-                remove(self.vql_file)
+                unlink(file)
             except OSError as e:
-                self.error_message_box("Error", "An error occurred during removal of file : " + self.vql_file, e)
-
-        if self.write_file(self.vql_file, tree.get_code_as_file(selected=True)):
-            ok = True
-
+                self.error_message_box("Error", "An error occurred during removal of file : " + file, e)
+                self.statusBar.showMessage("Save error")
+                tree.blockSignals(False)
+                return False
+        tree.blockSignals(True)
+        content = tree.get_code_as_file(selected=True)
         tree.blockSignals(False)
-        if ok:
-            self.statusBar.showMessage("Ready")
-        else:
-            self.statusBar.showMessage("Save error")
-        return ok
+        if content:
+            if self.write_file(file, content):
+                self.statusBar.showMessage("Ready")
+                return True
+            else:
+                self.statusBar.showMessage("Save error")
+                return False
+
+    def save_model_to_repository(self, folder):
+        """
+        Function to save the model selection to a repository
+        The files are written to chapter_folder
+        :return: Boolean on success
+        :rtype: bool
+        """
+        self.statusBar.showMessage("Saving")
+
+        if not folder:
+            self.statusBar.showMessage("Save Error")
+            return False
+
+        tree = self.all_chapters_treeview
+        tree.blockSignals(True)
+        tree.set_base_folder(folder)
+
+        for part_log_filepath, part_log_content in tree.get_part_logs():
+            sub_folder, file = path.split(part_log_filepath)
+            try:
+                makedirs(sub_folder)
+            except OSError as e:
+                self.statusBar.showMessage("Save Error")
+                self.error_message_box("Error", "An error occurred during creation of the folders in : " +
+                                       sub_folder, e)
+                return False
+            if not part_log_content:
+                self.statusBar.showMessage("Save Error")
+                return False
+
+            if not part_log_filepath:
+                self.statusBar.showMessage("Save Error")
+                return False
+
+            if not self.write_file(part_log_filepath, part_log_content):
+                self.statusBar.showMessage("Save Error")
+                return False
+
+        for file_path, content in tree.get_selected_code_files():
+            if not content:
+                self.statusBar.showMessage("Save Error")
+                return False
+            if not file_path:
+                self.statusBar.showMessage("Save Error")
+                return False
+
+            if not self.write_file(file_path, content):
+                self.statusBar.showMessage("Save Error")
+                return False
+        tree.blockSignals(False)
+
+        self.statusBar.showMessage("Ready")
+        return True
 
     def read_file(self, file):
         """
@@ -762,94 +769,64 @@ class VQLManagerWindow(QMainWindow):
             self.error_message_box("Error", "An error occurred during writing of file: " + file, e)
         return ok
 
-    def save_model_to_repository(self):
-        """
-        Function to save the model selection to a repository
-        The files are written to chapter_folder
-        :return: Boolean on success
-        :rtype: bool
-        """
-        ok = True
-        if self.repository_base_folder:
-            self.statusBar.showMessage("Saving")
-            tree = self.all_chapters_treeview
-            tree.blockSignals(True)
-            tree.set_base_folder(self.repository_base_folder)
-
-            for part_log_filepath, part_log_content in tree.get_part_logs():
-                folder, file = path.split(part_log_filepath)
-
-                try:
-                    makedirs(folder)
-                except OSError as e:
-                    ok = False
-                    self.error_message_box("Error", "An error occurred during creation of the folders in : " +
-                                           folder, e)
-
-                if not self.write_file(part_log_filepath, part_log_content):
-                    ok = False
-
-            for file_path, content in tree.get_selected_code_files():
-                if not self.write_file(file_path, content):
-                    ok = False
-            tree.blockSignals(False)
-        else:
-            ok = False
-
-        if ok:
-            self.statusBar.showMessage("Ready")
-        else:
-            self.statusBar.showMessage("Save Error")
-
-    def load_model_from_file(self):
+    def load_model_from_file(self, file):
         """
         Function to load a single .vql file into the VqlModel instance: all_chapters_treeview
         via its parse function. This function is called after all checks have been done
         :return: nothing
         """
-        if self.vql_file:
-            content = ''
-            self.statusBar.showMessage("Loading model")
-            if self.mode == VQL.SELECT:
-                content = self.read_file(self.vql_file)
-            elif self.mode == VQL.COMPARE:
-                content = self.read_file(self.compare_file)
 
-            if content:
-                tree = self.all_chapters_treeview
-                tree.blockSignals(True)
-                if self.mode == VQL.SELECT:
-                    tree.tree_reset()
-                tree.parse(content, self.mode)
-                self.update_selected_treeview()
-                tree.blockSignals(False)
-                self.statusBar.showMessage("Ready")
-            else:
-                self.statusBar.showMessage("No model found")
+        if not file:
+            self.message_to_user("No file found")
+            return False
 
-    def load_model_from_repository(self):
+        self.statusBar.showMessage("Loading model")
+        mode = self.get_mode()
+        tree = self.all_chapters_treeview
+        content = self.read_file(file)
+
+        if content:
+            tree.blockSignals(True)
+            if mode & VQL.SELECT:
+                tree.tree_reset()
+            elif mode & VQL.COMPARE:
+                tree.tree_reset_compare()
+
+            tree.parse(content, mode)
+            self.update_tree_widgets()
+            tree.blockSignals(False)
+        self.statusBar.showMessage("Ready")
+
+    def load_model_from_repository(self, folder):
         """
         Function to load a repository folder structure into the VqlModel instance: all_chapters_treeview
         via the read_vql_folder function. This function is called after all checks have been done
         :return: nothing
         """
 
-        if self.repository_base_folder:
-            tree = self.all_chapters_treeview
+        if not folder:
+            self.message_to_user("No folder found")
+            return False
+
+        mode = self.get_mode()
+        tree = self.all_chapters_treeview
+
+        self.statusBar.showMessage("Loading model")
+        content = self.read_vql_folder(folder)
+        if content:
             tree.blockSignals(True)
-            self.statusBar.showMessage("Loading model")
-            content = ''
-            if self.mode == VQL.SELECT:
+            if mode & VQL.SELECT:
                 tree.tree_reset()
-                content = self.read_vql_folder(self.repository_base_folder)
-            elif self.mode == VQL.COMPARE:
-                content = self.read_vql_folder(self.compare_repository)
-            tree.parse(content, self.mode)
-            self.update_selected_treeview()
+            elif mode & VQL.COMPARE:
+                tree.tree_reset_compare()
+            tree.parse(content, mode)
+            self.update_tree_widgets()
             tree.blockSignals(False)
-            self.statusBar.showMessage("Ready")
         else:
-            self.statusBar.showMessage("No model found")
+            self.statusBar.showMessage("Ready")
+            return False
+        self.statusBar.showMessage("Ready")
+        return True
 
     def read_vql_folder(self, folder):
         """
@@ -871,7 +848,7 @@ class VQLManagerWindow(QMainWindow):
                         content += self.read_file(file)
         return content
 
-    def update_selected_treeview(self):
+    def update_tree_widgets(self):
         """
         Builds/sets new content of the selected_treeview after the selection in the all_chapters_treeview is changed
         This function copies the selected items and leaves out the chapters that are empty

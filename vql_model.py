@@ -79,7 +79,6 @@ class VqlModel(QTreeWidget):
         self.compare_model_path = ''
         self.compare_model_type = ''
 
-
     def set_base_folder(self, base_folder):
         """
         Sets the repository base folder
@@ -300,7 +299,7 @@ class VqlModel(QTreeWidget):
 
         self.setHeaderLabel('Selection')
 
-    def tree2_reset(self):
+    def tree_reset_compare(self):
         """
         Reset of compare tree items
         :return:
