@@ -1,5 +1,18 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+"""
+VqlModel Class
+Overloaded QTreeWidget Class
+Holds the model data for the VQL Manager app
+Also functions as the view on the window
+
+file: vql_model.py
+Dependencies: PyQt5, collections, vql_manager_core.py, chapter.py
+
+Author: Andre Treebus
+Email: andretreebus@hotmail.com
+Last edited: November 2017
+"""
 
 from collections import OrderedDict
 from PyQt5.QtCore import Qt, QSize
@@ -9,6 +22,7 @@ from PyQt5.QtWidgets import QSizePolicy
 from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView
 from chapter import Chapter
 from vql_manager_core import VQL_Constants as VQL
+
 
 class VqlModel(QTreeWidget):
     """

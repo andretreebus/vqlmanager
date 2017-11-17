@@ -1,5 +1,25 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+"""
+Chapter Class
+Class representing the categories (chapters)
+related to the construction of
+one Denodo objects
+
+The class holds (as its parent) data of
+all code pieces related to the chapter
+
+This class is inherited from QTreeWidgetItem
+for showing itself in a QTreeWidget
+
+file: code_item.py
+Dependencies: os PyQt5 vql_manager_core.py
+
+Author: Andre Treebus
+Email: andretreebus@hotmail.com
+Last edited: November 2017
+"""
+
 from os import path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush

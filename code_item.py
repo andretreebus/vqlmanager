@@ -1,5 +1,25 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+"""
+CodeItem Class
+Class representing the code pieces
+related to the construction of
+one Denodo object
+
+The class holds data of
+Denodo object names
+and their vql code
+
+This class is inherited from QTreeWidgetItem
+for showing itself in a QTreeWidget
+
+file: code_item.py
+Dependencies: os PyQt5 vql_manager_core.py
+
+Author: Andre Treebus
+Email: andretreebus@hotmail.com
+Last edited: November 2017
+"""
 
 from os import path
 from PyQt5.QtCore import Qt, QVariant

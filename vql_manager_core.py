@@ -1,3 +1,17 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+"""
+VQL_Constants Class
+Several shared objects in the VQL Manager app
+
+file: vql_manager_core.py
+Dependencies: PyQt5
+
+Author: Andre Treebus
+Email: andretreebus@hotmail.com
+Last edited: November 2017
+"""
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
 
@@ -41,9 +55,6 @@ class VQL_Constants(object):
 
     # the delimiter use to separate chapters into CodeItems
     DELIMITER = "CREATE OR REPLACE"
-
-    # Width hint on screen
-    PANE_WIDTH = 300
 
     # Start quote of the Denodo script
     PROP_QUOTE = '# REQUIRES-PROPERTIES-FILE - # Do not remove this comment!\n#\n'

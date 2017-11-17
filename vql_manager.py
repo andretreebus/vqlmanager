@@ -1,16 +1,19 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+"""
+Denodo VQL Manager
 
-#####################################################
-# Denodo VQL Manager
-# Andre Treebus
-#
-#####################################################
-# Installation:
-# Install the needed libraries with pip or with installer
-# required libs:
-# python3 pip3 install shutil collections PyQt5 qdarkstyle
-#
+This program shows GUI
+to split, select, combine
+and compare Denodo .vql files
+
+Dependencies: shutil collections PyQt5 qdarkstyle and vqlmanagerwindow.py
+
+file: vqlmanagerwindow.py
+Author: Andre Treebus
+Email: andretreebus@hotmail.com
+Last edited: November 2017
+"""
 
 from sys import exit, argv
 from PyQt5.QtWidgets import QApplication
