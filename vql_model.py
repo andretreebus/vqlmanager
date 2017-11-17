@@ -15,13 +15,13 @@ Last edited: November 2017
 """
 
 from collections import OrderedDict
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QWidget
-from PyQt5.QtWidgets import QSizePolicy
-from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView
+# from PyQt5.QtWidgets import QSizePolicy
+from PyQt5.QtWidgets import QTreeWidget
 from chapter import Chapter
-from vql_manager_core import VQL_Constants as VQL
+from vql_manager_core import VqlConstants as Vql
 
 
 class VqlModel(QTreeWidget):
@@ -43,22 +43,23 @@ class VqlModel(QTreeWidget):
         :type parent: QWidget
         """
         super(VqlModel, self).__init__(parent)
-        self.setColumnCount(1)
-        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.setSelectionMode(QAbstractItemView.NoSelection)
-        self.setIconSize(QSize(16, 16))
-        self.setUniformRowHeights(True)
-        self.setHeaderLabel('No file selected')
-        self.setToolTip("Select code parts: Right mouse click")
-        self.setToolTipDuration(2000)
-        self.setIconSize(QSize(16, 16))
-        self.setColumnCount(1)
-        self.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        # self.setColumnCount(1)
+        # self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # self.setSelectionMode(QAbstractItemView.NoSelection)
+        # self.setIconSize(QSize(16, 16))
+        # self.setUniformRowHeights(True)
+        # self.setHeaderLabel('No file selected')
+        # self.setToolTip("Select code parts: Right mouse click")
+        # self.setToolTipDuration(2000)
+        # self.setIconSize(QSize(16, 16))
+        # self.setColumnCount(1)
+        # self.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
+        # self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
         # custom class variables #########################
         # root is the first/parent node for all QTreeWidgetItem children
         self.root = self.invisibleRootItem()
+
         # base_folder for storing as a repository
         self._base_folder = None
 
@@ -68,12 +69,12 @@ class VqlModel(QTreeWidget):
         self.chapters = OrderedDict()
 
         # initialize by adding empty chapters
-        self._add_chapters(VQL.CHAPTER_NAMES)
+        self._add_chapters(Vql.CHAPTER_NAMES)
         self.changed = False
         self.new_objects = list()
         self.to_add = list()
 
-        self.view_mode = VQL.SELECT | VQL.BASE_MODEL_FILE
+        self.view_mode = 0
         self.base_model_path = ''
         self.base_model_type = ''
         self.compare_model_path = ''
@@ -91,7 +92,7 @@ class VqlModel(QTreeWidget):
             for chapter_name, chapter in self.chapters.items():
                 chapter.set_base_folder(base_folder)
         else:
-            self._base_folder = None
+            self._base_folder = ''
 
     def _add_chapters(self, chapter_names):
         """
@@ -169,22 +170,24 @@ class VqlModel(QTreeWidget):
         The second value is the item itself
         """
         for chapter_name, chapter in self.chapters.items():
-            if chapter.is_selected():
-                if mode == VqlModel.SELECT:
+            if not chapter.is_selected():
+                continue
+
+            if mode & VqlModel.SELECT:
+                yield True, chapter
+                for code_item in chapter.code_items:
+                    if code_item.is_selected():
+                        yield False, code_item
+            elif mode & VqlModel.COMPARE:
+                items = list()
+                for code_item in chapter.code_items:
+                    if code_item.is_selected():
+                        if not code_item.get_color() == Vql.WHITE:
+                            items.append(code_item)
+                if items:
                     yield True, chapter
-                    for code_item in chapter.code_items:
-                        if code_item.is_selected():
-                            yield False, code_item
-                elif mode == VqlModel.COMPARE:
-                    items = list()
-                    for code_item in chapter.code_items:
-                        if code_item.is_selected():
-                            if not code_item.get_color() == VQL.WHITE:
-                                items.append(code_item)
-                    if items:
-                        yield True, chapter
-                        for item in items:
-                            yield False, item
+                    for item in items:
+                        yield False, item
 
     def parse(self, file_content, mode):
         """
@@ -197,15 +200,15 @@ class VqlModel(QTreeWidget):
         """
 
         length = len(file_content)
-        if mode == VqlModel.SELECT:
+        if mode & VqlModel.SELECT:
             self.changed = False
             self.tree_reset()
-            self.setHeaderLabel('Selection')
-        elif mode == VqlModel.COMPARE:
-            self.tree2_reset()
+            # self.setHeaderLabel('Selection')
+        elif mode & VqlModel.COMPARE:
+            self.tree_reset_compare()
             self.new_objects = list()
             self.to_add = list()
-            self.setHeaderLabel('Difference')
+            # self.setHeaderLabel('Difference')
 
         indices = [[chapter_name, file_content.find(chapter.header)]
                    for chapter_name, chapter in self.chapters.items()]
@@ -221,7 +224,7 @@ class VqlModel(QTreeWidget):
             object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
             for object_name, object_code in object_code:
                 if mode == VqlModel.SELECT:
-                    self.add_code_part(chapter_name, object_name, object_code, VQL.WHITE)
+                    self.add_code_part(chapter_name, object_name, object_code, Vql.WHITE)
                 else:
                     self.add_compared_part(chapter_name, object_name, object_code)
 
@@ -239,7 +242,7 @@ class VqlModel(QTreeWidget):
         for chapter_name, chapter in self.chapters.items():
             for item in chapter.code_items:
                 if item.object_name not in self.new_objects:
-                    item.set_color(VQL.RED)
+                    item.set_color(Vql.RED)
 
     def compare(self, chapter_name, object_name, object_code):
         """
@@ -273,9 +276,9 @@ class VqlModel(QTreeWidget):
             if is_same:   # object not changed
                 pass
             else:      # object changed
-                self.to_add.append((chapter_name, object_name, object_code, VQL.YELLOW))
+                self.to_add.append((chapter_name, object_name, object_code, Vql.YELLOW))
         else:   # object is new item
-            self.to_add.append((chapter_name, object_name, object_code, VQL.GREEN))
+            self.to_add.append((chapter_name, object_name, object_code, Vql.GREEN))
 
     def tree_reset(self):
         """
@@ -307,20 +310,7 @@ class VqlModel(QTreeWidget):
         pass
 
     @staticmethod
-    def get_last_word(line):
-        """
-        Helper function for the extract_filename function
-        :param line: string, one line of code (the first line)
-        :type line: str
-        :return: string with the last word on the line
-        :rtype: str
-        """
-        line_reversed = line.strip()[::-1]
-        last_space = line_reversed.find(' ')
-        last_word = line_reversed[0:last_space][::-1]
-        return last_word.strip()
-
-    def extract_object_name(self, chapter_name, command):
+    def extract_object_name(chapter_name, command):
         """
         Helper function for the 'parse' function
         The function searches for the Denodo object name to construct a unique file name in the repository
@@ -337,13 +327,26 @@ class VqlModel(QTreeWidget):
         :rtype: str
         """
 
+        def get_last_word(line):
+            """
+            Helper function for the extract_filename function
+            :param line: string, one line of code (the first line)
+            :type line: str
+            :return: string with the last word on the line
+            :rtype: str
+            """
+            line_reversed = line.strip()[::-1]
+            last_space = line_reversed.find(' ')
+            last_word = line_reversed[0:last_space][::-1]
+            return last_word.strip()
+
         filename = ''
 
         # Object names are on the first line of the code item
         first_line = command[0:command.find("\n")]
 
         if chapter_name == 'I18N MAPS':
-            filename = self.get_last_word(first_line[0:-2])
+            filename = get_last_word(first_line[0:-2])
         elif chapter_name == 'DATABASE':
             pass  # Todo: we don't use export vql files that span multiple databases in Denodo
         elif chapter_name == 'FOLDERS':
@@ -351,9 +354,9 @@ class VqlModel(QTreeWidget):
         elif chapter_name == 'LISTENERS JMS':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'DATASOURCES':
-            filename = self.get_last_word(first_line)
+            filename = get_last_word(first_line)
         elif chapter_name == 'WRAPPERS':
-            filename = self.get_last_word(first_line)
+            filename = get_last_word(first_line)
         elif chapter_name == 'STORED PROCEDURES':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'TYPES':
@@ -402,23 +405,23 @@ class VqlModel(QTreeWidget):
             """
             color = None
             if to_text:
-                if item_color == VQL.RED:
+                if item_color == Vql.RED:
                     color = 'red'
-                elif item_color == VQL.GREEN:
+                elif item_color == Vql.GREEN:
                     color = 'green'
-                elif item_color == VQL.YELLOW:
+                elif item_color == Vql.YELLOW:
                     color = 'yellow'
-                elif item_color == VQL.WHITE:
+                elif item_color == Vql.WHITE:
                     color = 'white'
             else:
                 if item_color == 'red':
-                    color = VQL.RED
+                    color = Vql.RED
                 elif item_color == 'green':
-                    color = VQL.GREEN
+                    color = Vql.GREEN
                 elif item_color == 'yellow':
-                    color = VQL.YELLOW
+                    color = Vql.YELLOW
                 elif item_color == 'white':
-                    color = VQL.WHITE
+                    color = Vql.WHITE
             return color
 
         def update_chapter_colors(local_chapter_item):
@@ -437,11 +440,11 @@ class VqlModel(QTreeWidget):
 
             length = len(unique_colors_in_chapter)
             if length == 0:
-                chapter_color = VQL.RED
+                chapter_color = Vql.RED
             elif length == 1:
                 chapter_color = translate_colors(list(unique_colors_in_chapter)[0], False)
             else:
-                chapter_color = VQL.YELLOW
+                chapter_color = Vql.YELLOW
             local_chapter_item.setForeground(0, chapter_color)
 
         root_item = tree.invisibleRootItem()

@@ -16,7 +16,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
 
 
-class VQL_Constants(object):
+class VqlConstants(object):
     # convenience names for class constants
     # checkbox option in the tree widgets
     PART_STATE = Qt.PartiallyChecked

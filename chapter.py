@@ -25,7 +25,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QTreeWidgetItem
 from code_item import CodeItem
-from vql_manager_core import VQL_Constants as VQL
+from vql_manager_core import VqlConstants as Vql
 
 
 class Chapter(QTreeWidgetItem):
@@ -46,9 +46,9 @@ class Chapter(QTreeWidgetItem):
         :type name: str
         """
         super(Chapter, self).__init__(parent)
-        self.setCheckState(0, VQL.CHECKED)
+        self.setCheckState(0, Vql.CHECKED)
         self.childIndicatorPolicy = 2
-        self.setFlags(VQL.ITEM_FLAG_ALL)
+        self.setFlags(Vql.ITEM_FLAG_ALL)
         self.name = name
         self.setText(0, name)
         self.setData(0, Qt.UserRole, 'chapter')
@@ -155,7 +155,7 @@ class Chapter(QTreeWidgetItem):
         :return: Boolean
         :rtype: bool
         """
-        if self.checkState(0) in (VQL.PART_STATE, VQL.CHECKED) and len(self.code_items) > 0:
+        if self.checkState(0) in (Vql.PART_STATE, Vql.CHECKED) and len(self.code_items) > 0:
             return True
         else:
             return False
