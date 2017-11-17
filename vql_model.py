@@ -7,8 +7,8 @@ from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QSizePolicy
 from PyQt5.QtWidgets import QTreeWidget, QAbstractItemView
-from chapter import Chapter, CodeItem
-
+from chapter import Chapter
+from vql_manager_core import VQL_Constants as VQL
 
 class VqlModel(QTreeWidget):
     """
@@ -20,32 +20,6 @@ class VqlModel(QTreeWidget):
     In this application it is instanced as: all_chapter_treeview
     The purpose of this class is to make GUI based selections
     """
-    # some class constants
-    # flags for for checkbox behavior
-    ITEM_FLAG_ALL = CodeItem.ITEM_FLAG_ALL
-
-    PART_STATE = Qt.PartiallyChecked
-    CHECKED = Qt.Checked
-    UNCHECKED = Qt.Unchecked
-
-    # main chapter names as used in Denodo code
-    CHAPTER_NAMES = ['I18N MAPS', 'DATABASE', 'FOLDERS', 'LISTENERS JMS', 'DATASOURCES', 'WRAPPERS',
-                     'STORED PROCEDURES', 'TYPES', 'MAPS', 'BASE VIEWS', 'VIEWS', 'ASSOCIATIONS',
-                     'WEBSERVICES', 'WIDGETS', 'WEBCONTAINER WEB SERVICE DEPLOYMENTS',
-                     'WEBCONTAINER WIDGET DEPLOYMENTS']
-
-    # the delimiter use to separate chapters into CodeItems
-    DELIMITER = "CREATE OR REPLACE"
-
-    # Width hint on screen
-    PANE_WIDTH = 300
-
-    # Start quote of the Denodo script
-    PROP_QUOTE = '# REQUIRES-PROPERTIES-FILE - # Do not remove this comment!\n#\n'
-
-    # modes
-    SELECT = 1
-    COMPARE = 2
 
     def __init__(self, parent):
         """
@@ -65,7 +39,7 @@ class VqlModel(QTreeWidget):
         self.setToolTipDuration(2000)
         self.setIconSize(QSize(16, 16))
         self.setColumnCount(1)
-        self.setMinimumSize(QSize(VqlModel.PANE_WIDTH, 0))
+        self.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
         # custom class variables #########################
@@ -80,10 +54,17 @@ class VqlModel(QTreeWidget):
         self.chapters = OrderedDict()
 
         # initialize by adding empty chapters
-        self._add_chapters(VqlModel.CHAPTER_NAMES)
+        self._add_chapters(VQL.CHAPTER_NAMES)
         self.changed = False
         self.new_objects = list()
         self.to_add = list()
+
+        self.view_mode = VQL.SELECT | VQL.BASE_MODEL_FILE
+        self.base_model_path = ''
+        self.base_model_type = ''
+        self.compare_model_path = ''
+        self.compare_model_type = ''
+
 
     def set_base_folder(self, base_folder):
         """
@@ -185,7 +166,7 @@ class VqlModel(QTreeWidget):
                     items = list()
                     for code_item in chapter.code_items:
                         if code_item.is_selected():
-                            if not code_item.get_color() == CodeItem.WHITE:
+                            if not code_item.get_color() == VQL.WHITE:
                                 items.append(code_item)
                     if items:
                         yield True, chapter
@@ -227,7 +208,7 @@ class VqlModel(QTreeWidget):
             object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
             for object_name, object_code in object_code:
                 if mode == VqlModel.SELECT:
-                    self.add_code_part(chapter_name, object_name, object_code, CodeItem.WHITE)
+                    self.add_code_part(chapter_name, object_name, object_code, VQL.WHITE)
                 else:
                     self.add_compared_part(chapter_name, object_name, object_code)
 
@@ -245,7 +226,7 @@ class VqlModel(QTreeWidget):
         for chapter_name, chapter in self.chapters.items():
             for item in chapter.code_items:
                 if item.object_name not in self.new_objects:
-                    item.set_color(CodeItem.RED)
+                    item.set_color(VQL.RED)
 
     def compare(self, chapter_name, object_name, object_code):
         """
@@ -279,9 +260,9 @@ class VqlModel(QTreeWidget):
             if is_same:   # object not changed
                 pass
             else:      # object changed
-                self.to_add.append((chapter_name, object_name, object_code, CodeItem.YELLOW))
+                self.to_add.append((chapter_name, object_name, object_code, VQL.YELLOW))
         else:   # object is new item
-            self.to_add.append((chapter_name, object_name, object_code, CodeItem.GREEN))
+            self.to_add.append((chapter_name, object_name, object_code, VQL.GREEN))
 
     def tree_reset(self):
         """
@@ -408,23 +389,23 @@ class VqlModel(QTreeWidget):
             """
             color = None
             if to_text:
-                if item_color == CodeItem.RED:
+                if item_color == VQL.RED:
                     color = 'red'
-                elif item_color == CodeItem.GREEN:
+                elif item_color == VQL.GREEN:
                     color = 'green'
-                elif item_color == CodeItem.YELLOW:
+                elif item_color == VQL.YELLOW:
                     color = 'yellow'
-                elif item_color == CodeItem.WHITE:
+                elif item_color == VQL.WHITE:
                     color = 'white'
             else:
                 if item_color == 'red':
-                    color = CodeItem.RED
+                    color = VQL.RED
                 elif item_color == 'green':
-                    color = CodeItem.GREEN
+                    color = VQL.GREEN
                 elif item_color == 'yellow':
-                    color = CodeItem.YELLOW
+                    color = VQL.YELLOW
                 elif item_color == 'white':
-                    color = CodeItem.WHITE
+                    color = VQL.WHITE
             return color
 
         def update_chapter_colors(local_chapter_item):
@@ -443,11 +424,11 @@ class VqlModel(QTreeWidget):
 
             length = len(unique_colors_in_chapter)
             if length == 0:
-                chapter_color = CodeItem.RED
+                chapter_color = VQL.RED
             elif length == 1:
                 chapter_color = translate_colors(list(unique_colors_in_chapter)[0], False)
             else:
-                chapter_color = CodeItem.YELLOW
+                chapter_color = VQL.YELLOW
             local_chapter_item.setForeground(0, chapter_color)
 
         root_item = tree.invisibleRootItem()

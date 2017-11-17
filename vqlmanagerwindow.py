@@ -10,27 +10,15 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
-
-from vql_model import VqlModel, CodeItem
+from vql_model import VqlModel
+from code_item import CodeItem
+from vql_manager_core import VQL_Constants as VQL
 
 
 class VQLManagerWindow(QMainWindow):
     """
     Main application class for the GUI.
    """
-
-    # convenience names for class constants
-    # checkbox option in the tree widgets
-    PART_STATE = Qt.PartiallyChecked
-    CHECKED = Qt.Checked
-    UNCHECKED = Qt.Unchecked
-
-    # Hint for the width of the tree wigets
-    PANE_WIDTH = 300
-
-    # modes
-    SELECT = VqlModel.SELECT
-    COMPARE = VqlModel.COMPARE
 
     def __init__(self, parent=None):
         """
@@ -51,7 +39,7 @@ class VQLManagerWindow(QMainWindow):
         self.setMaximumSize(QSize(1920, 1080))
         self.setIconSize(QSize(32, 32))
         self.setWindowIcon(QIcon(self._root + '/images/splitter.png'))
-        self.setWindowTitle("VQL Splitter App")
+        self.setWindowTitle("VQL Manager")
 
         # initialize mainwidget and layout
         self.mainwidget = QWidget(self, flags=Qt.Widget)
@@ -66,8 +54,8 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.setIconSize(QSize(16, 16))
         self.all_chapters_treeview.setUniformRowHeights(True)
         self.all_chapters_treeview.setHeaderLabel('No file selected')
-        self.all_chapters_treeview.setToolTip("Select code parts: Right mouse click")
-        self.all_chapters_treeview.setToolTipDuration(2000)
+        # self.all_chapters_treeview.setToolTip("Select code parts: Right mouse click")
+        # self.all_chapters_treeview.setToolTipDuration(2000)
         self.all_chapters_treeview.setIconSize(QSize(16, 16))
         self.all_chapters_treeview.setColumnCount(1)
         self.all_chapters_treeview.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
@@ -77,8 +65,8 @@ class VQLManagerWindow(QMainWindow):
         self.selected_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.selected_treeview.setSelectionMode(QAbstractItemView.NoSelection)
         self.selected_treeview.setUniformRowHeights(True)
-        self.selected_treeview.setHeaderLabel('Selection')
-        self.selected_treeview.setToolTip("Selected parts: click to view source code")
+        self.selected_treeview.setHeaderLabel('Selection Pane')
+        self.selected_treeview.setToolTip("Selected parts: Click to view source code")
         self.selected_treeview.setToolTipDuration(2000)
         self.selected_treeview.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
         self.selected_treeview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -89,6 +77,26 @@ class VQLManagerWindow(QMainWindow):
         self.command_text_edit_label.setText("Command:")
         self.command_text_edit_label.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
         self.command_text_edit_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.mode_label = QLabel(self.mainwidget)
+        self.mode_label.setText("View Mode: Selection")
+        self.mode_label.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
+        self.mode_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.base_model_path_label = QLabel(self.mainwidget)
+        self.base_model_path_label.setText("File: base model")
+        self.base_model_path_label.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
+        self.base_model_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.compare_model_path_label = QLabel(self.mainwidget)
+        self.compare_model_path_label.setText("File: compare model")
+        self.compare_model_path_label.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
+        self.compare_model_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.selection_viewer_label = QLabel(self.mainwidget)
+        self.selection_viewer_label.setText("selview")
+        self.selection_viewer_label.setMinimumSize(QSize(VQLManagerWindow.PANE_WIDTH, 0))
+        self.selection_viewer_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.command_txtEdit = QTextEdit(self.mainwidget)
         self.command_txtEdit.setAcceptRichText(False)
@@ -101,13 +109,26 @@ class VQLManagerWindow(QMainWindow):
         self.command_txtEdit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         #  Layout ################################################################################
-        self.layout.addWidget(self.all_chapters_treeview,   0, 0, 3, 1)
-        self.layout.addWidget(self.selected_treeview,       0, 1)
-        self.layout.addWidget(self.command_text_edit_label, 1, 1)
-        self.layout.addWidget(self.command_txtEdit,         2, 1)
-        self.layout.setRowStretch(0, 8)
+        # left pane
+        self.layout.addWidget(self.mode_label,                0, 0, 1, 1)
+        self.layout.addWidget(self.base_model_path_label,     1, 0, 1, 1)
+        self.layout.addWidget(self.compare_model_path_label, 2, 0, 1, 1)
+        self.layout.addWidget(self.all_chapters_treeview,     3, 0, 3, 1)
+
+        # right pane
+
+        self.layout.addWidget(self.selection_viewer_label,  0, 1, 3, 1)
+        self.layout.addWidget(self.selected_treeview,       3, 1)
+        self.layout.addWidget(self.command_text_edit_label, 4, 1)
+        self.layout.addWidget(self.command_txtEdit,         5, 1)
+
+        self.layout.setRowStretch(0, 1)
         self.layout.setRowStretch(1, 1)
-        self.layout.setRowStretch(2, 8)
+        self.layout.setRowStretch(2, 1)
+        self.layout.setRowStretch(3, 10)
+        self.layout.setRowStretch(4, 1)
+        self.layout.setRowStretch(5, 10)
+
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 1)
 
@@ -194,13 +215,15 @@ class VQLManagerWindow(QMainWindow):
         self.update_timer.timeout.connect(self.update_selected_treeview)
 
         # Initialize class properties ###########################################################################
+
+        self.mode = VQLManagerWindow.SELECT
         self._vql_file = ''
         self.compare_file = ''
         self._repository = ''
         self.compare_repository = ''
         self.model_loaded = False
         self.model2_loaded = False
-        self.mode = VQLManagerWindow.SELECT
+
 
     @property
     def repository_base_folder(self):
@@ -242,6 +265,16 @@ class VQLManagerWindow(QMainWindow):
         """
         self._vql_file = file_name
         self.all_chapters_treeview.setHeaderLabel('File: ' + file_name)
+
+    def window_switch_to_mode(self):
+        if self.mode & VQL.SELECT:
+            self.mode_label.setText("View Mode: Selection")
+            self.compare_model_path_label.setText = ''
+            self.base_model_path_label.setText = 'File : ' + self.base_model_path
+        elif self.mode & VQL.COMPARE:
+            self.mode_label.setText("View Mode: Selection")
+            self.compare_model_path_label.setText = 'Compared with: ' + self.compare_model_path
+
 
     # Event handlers for opening and saving models
     def on_file_open(self):

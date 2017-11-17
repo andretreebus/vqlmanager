@@ -4,7 +4,8 @@
 from os import path
 from PyQt5.QtCore import Qt, QVariant
 from PyQt5.QtWidgets import QTreeWidgetItem
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtGui import QBrush
+from vql_manager_core import VQL_Constants as VQL
 
 
 class CodeItem(QTreeWidgetItem):
@@ -13,16 +14,6 @@ class CodeItem(QTreeWidgetItem):
     It inherits from QTreeWidgetItem, so it can display in a QTreeWidget
     Basically a bag for pieces of Denodo code
     """
-    PART_STATE = Qt.PartiallyChecked
-    CHECKED = Qt.Checked
-    UNCHECKED = Qt.Unchecked
-
-    RED = QBrush(QColor("#ff4444"))
-    GREEN = QBrush(QColor("#44ff44"))
-    YELLOW = QBrush(QColor("#ffff44"))
-    WHITE = QBrush(QColor("#cccccc"))
-    ITEM_FLAG_ALL = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
-    ITEM_FLAG_SEL = Qt.ItemIsSelectable | Qt.ItemIsEnabled
 
     def __init__(self, parent, object_name, code, color=None):
         """
@@ -37,15 +28,15 @@ class CodeItem(QTreeWidgetItem):
 
         super(CodeItem, self).__init__(parent)
 
-        self.setCheckState(0, CodeItem.CHECKED)
+        self.setCheckState(0, VQL.CHECKED)
         self.childIndicatorPolicy = 2
-        self.setFlags(CodeItem.ITEM_FLAG_ALL)
+        self.setFlags(VQL.ITEM_FLAG_ALL)
         self.object_name = object_name
         self.setText(0, object_name)
         self._code = code
         self.setData(0, Qt.UserRole, code)
         self._sub_folder = None
-        self.color = CodeItem.WHITE
+        self.color = VQL.WHITE
         if color:
             self.setForeground(0, color)
         else:
@@ -94,7 +85,7 @@ class CodeItem(QTreeWidgetItem):
         :return: Boolean
         :rtype: bool
         """
-        if self.checkState(0) == CodeItem.CHECKED:
+        if self.checkState(0) == VQL.CHECKED:
             return True
         else:
             CodeItem.changed = True
@@ -150,10 +141,10 @@ class CodeItem(QTreeWidgetItem):
         """
 
         item = QTreeWidgetItem(parent)
-        item.setCheckState(col, CodeItem.CHECKED)
+        item.setCheckState(col, VQL.CHECKED)
         item.setData(col, Qt.CheckStateRole, QVariant())
         item.childIndicatorPolicy = 2
-        item.setFlags(CodeItem.ITEM_FLAG_SEL)
+        item.setFlags(VQL.ITEM_FLAG_SEL)
         item.setText(col, text)
         item.setData(col, Qt.UserRole, user_data)
         item.setForeground(0, color)
