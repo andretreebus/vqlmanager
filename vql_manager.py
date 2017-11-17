@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 #####################################################
-# Denodo VQL Code splitter
+# Denodo VQL Manager
 # Andre Treebus
 #
 #####################################################
