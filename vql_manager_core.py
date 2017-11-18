@@ -12,11 +12,11 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
 
 
-class VqlConstants(object):
+class VqlConstants(QObject):
     # convenience names for class constants
     # checkbox option in the tree widgets
     PART_STATE = Qt.PartiallyChecked
@@ -26,17 +26,7 @@ class VqlConstants(object):
     # Hint for the width of the tree wigets
     PANE_WIDTH = 300
 
-    # application modes en flags
-    SELECT = 1 << 1
-    COMPARE = 1 << 2
-    BASE_MODEL_FILE = 1 << 3
-    BASE_MODEL_REPO = 1 << 4
-    COMP_MODEL_FILE = 1 << 5
-    COMP_MODEL_REPO = 1 << 6
-    BASE_MODEL_LOADED = 1 << 7
-    COMP_MODEL_LOADED = 1 << 8
-    FILE = 1 << 9
-    REPO = 1 << 10
+    # # application modes en flags
 
     # colors used
     RED = QBrush(QColor("#ff4444"))
@@ -59,3 +49,37 @@ class VqlConstants(object):
 
     # Start quote of the Denodo script
     PROP_QUOTE = '# REQUIRES-PROPERTIES-FILE - # Do not remove this comment!\n#\n'
+
+    class Mode(QObject):
+        NONE = 0
+        SELECT = 1 << 1
+        COMPARE = 1 << 2
+        BASE_MODEL_FILE = 1 << 3
+        BASE_MODEL_REPO = 1 << 4
+        COMP_MODEL_FILE = 1 << 5
+        COMP_MODEL_REPO = 1 << 6
+        BASE_MODEL_LOADED = 1 << 7
+        COMP_MODEL_LOADED = 1 << 8
+        FILE = 1 << 9
+        REPO = 1 << 10
+    Q_FLAGS(Mode)
+
+    NONE = Mode.NONE
+    SELECT = Mode.SELECT
+    COMPARE = Mode.COMPARE
+    BASE_MODEL_FILE = Mode.BASE_MODEL_FILE
+    BASE_MODEL_REPO = Mode.BASE_MODEL_REPO
+    COMP_MODEL_FILE = Mode.COMP_MODEL_FILE
+    COMP_MODEL_REPO = Mode.COMP_MODEL_REPO
+    BASE_MODEL_LOADED = Mode.BASE_MODEL_LOADED
+    COMP_MODEL_LOADED = Mode.COMP_MODEL_LOADED
+    FILE = Mode.FILE
+    REPO = Mode.REPO
+
+
+
+
+
+
+
+

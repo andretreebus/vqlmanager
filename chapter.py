@@ -143,11 +143,16 @@ class Chapter(QTreeWidgetItem):
         :return: string with code content
         :rtype: str
         """
+
         if selected:
             if self.is_selected():
-                return self.header + self._get_code_as_file(selected)
+                code = self._get_code_as_file(selected)
+                if code:
+                    return self.header + code
         else:
-            return self.header + self._get_code_as_file(selected)
+            code = self._get_code_as_file(selected)
+            if code:
+                return self.header + code
 
     def is_selected(self):
         """

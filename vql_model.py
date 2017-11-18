@@ -43,18 +43,6 @@ class VqlModel(QTreeWidget):
         :type parent: QWidget
         """
         super(VqlModel, self).__init__(parent)
-        # self.setColumnCount(1)
-        # self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        # self.setSelectionMode(QAbstractItemView.NoSelection)
-        # self.setIconSize(QSize(16, 16))
-        # self.setUniformRowHeights(True)
-        # self.setHeaderLabel('No file selected')
-        # self.setToolTip("Select code parts: Right mouse click")
-        # self.setToolTipDuration(2000)
-        # self.setIconSize(QSize(16, 16))
-        # self.setColumnCount(1)
-        # self.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        # self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
         # custom class variables #########################
         # root is the first/parent node for all QTreeWidgetItem children
@@ -128,10 +116,12 @@ class VqlModel(QTreeWidget):
         :return: string of code content
         :rtype: str
         """
-        code = ''
-        code += VqlModel.PROP_QUOTE
+
+        code = Vql.PROP_QUOTE
         for chapter_name, chapter in self.chapters.items():
-            code += chapter.get_code_as_file(selected)
+            chapter_code = chapter.get_code_as_file(selected)
+            if chapter_code:
+                code += chapter_code
         return code
 
     def get_part_logs(self):

@@ -26,7 +26,6 @@ from vql_model import VqlModel
 from code_item import CodeItem
 from vql_manager_core import VqlConstants as Vql
 
-
 class VQLManagerWindow(QMainWindow):
     """
     Main application class for the GUI.
@@ -102,8 +101,14 @@ class VQLManagerWindow(QMainWindow):
         self.compare_repository_file = ''
         self.compare_repository_folder = ''
 
-        self._mode = 0
-        self.switch_to_mode(0)
+        self._mode = Vql.NONE
+        self.switch_to_mode(self._mode)
+
+        self.switch_to_mode(Vql.SELECT | Vql.BASE_MODEL_FILE)
+        file = '/home/andre/PycharmProjects/vql/data/db.vql'
+        if self.load_model_from_file(file):
+            self.base_repository_file = file
+            self.switch_to_mode(Vql.SELECT | Vql.BASE_MODEL_FILE | Vql.BASE_MODEL_LOADED)
 
     def setup_ui(self):
         """
@@ -148,9 +153,6 @@ class VQLManagerWindow(QMainWindow):
         self.selected_treeview.setIconSize(QSize(16, 16))
         self.selected_treeview.setColumnCount(1)
         set_size(self.selected_treeview)
-
-        # self.selected_treeview.setMinimumSize(QSize(VQL.PANE_WIDTH, 0))
-        # self.selected_treeview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.command_text_edit_label.setText("Command:")
 
@@ -262,37 +264,37 @@ class VQLManagerWindow(QMainWindow):
     def get_mode(self):
         return self._mode
 
-    def switch_to_mode(self, mode):
+    def switch_to_mode(self, new_mode):
         """
         This function redresses the window to reflect the new mode
 
-        :param mode:
+        :param new_mode:
         :return:
         """
 
-        if not mode:
-
+        if new_mode == Vql.NONE:
             self.mode_label.setText('View Mode: Selection')
             self.base_repository_label.setText('No file loaded')
             self.compare_repository_label.setText('')
             self.all_chapters_treeview.setHeaderLabel('Selection Pane')
+            self._mode = new_mode
+            return
+        else:
+            if new_mode & Vql.BASE_MODEL_LOADED:
+                self.mode_label.setText("View Mode: Selection")
+                if new_mode & Vql.BASE_MODEL_FILE:
+                    self.base_repository_label.setText('File : ' + self.base_repository_file)
+                elif new_mode & Vql.BASE_MODEL_REPO:
+                    self.base_repository_label.setText('Repository : ' + self.base_repository_folder)
+                self.compare_repository_label.setText('')
 
-        if mode & Vql.BASE_MODEL_LOADED:
-            self.mode_label.setText("View Mode: Selection")
-            if mode & Vql.BASE_MODEL_FILE:
-                self.base_repository_label.setText('File : ' + self.base_repository_file)
-            elif mode & Vql.BASE_MODEL_REPO:
-                self.base_repository_label.setText('Repository : ' + self.base_repository_folder)
-            self.compare_repository_label.setText('')
-
-        elif mode & Vql.COMP_MODEL_LOADED:
-            self.mode_label.setText("View Mode: Compare")
-            if mode & Vql.COMP_MODEL_FILE:
-                self.compare_repository_label.setText = 'File : ' + self.compare_repository_file
-            elif mode & Vql.COMP_MODEL_REPO:
-                self.compare_repository_label.setText = 'Repository : ' + self.compare_repository_folder
-
-        self._mode = mode
+            elif new_mode & Vql.COMP_MODEL_LOADED:
+                self.mode_label.setText("View Mode: Compare")
+                if new_mode & Vql.COMP_MODEL_FILE:
+                    self.compare_repository_label.setText = 'File : ' + self.compare_repository_file
+                elif new_mode & Vql.COMP_MODEL_REPO:
+                    self.compare_repository_label.setText = 'Repository : ' + self.compare_repository_folder
+            self._mode = new_mode
 
     # Event handlers for opening and saving models
 
@@ -311,8 +313,7 @@ class VQLManagerWindow(QMainWindow):
             if current_mode & model_loaded:
                 # some base model is open:
                 if self.ask_drop_changes():
-                    current_mode = current_mode & ~model_loaded
-                    self.switch_to_mode(current_mode)
+                    self.switch_to_mode(Vql.NONE)
                     self.all_chapters_treeview.tree_reset()
                     self.update_tree_widgets()
                     self.on_open(new_mode)  # recurse to the begin
@@ -338,8 +339,9 @@ class VQLManagerWindow(QMainWindow):
             if current_mode & (Vql.BASE_MODEL_FILE | Vql.BASE_MODEL_REPO):  # there is a base model
                 if current_mode & compare_loaded:  # there is a compare going on
                     if self.ask_drop_changes():
-                        current_mode = current_mode & ~compare_loaded
-                        self.self.switch_to_mode(current_mode)
+                        reset_mode = (current_mode ^ (current_mode & Vql.COMP_MODEL_FILE)) |\
+                                     (current_mode ^ (current_mode & Vql.COMP_MODEL_REPO))
+                        self.self.switch_to_mode(reset_mode)
                         self.all_chapters_treeview.tree_reset_compare()
                         self.update_tree_widgets()
                         self.on_open(new_mode)  # recurse to the begin
@@ -377,11 +379,11 @@ class VQLManagerWindow(QMainWindow):
         if save_mode & Vql.FILE:
             file = self.ask_file_save()
             if file:
-                self.save_model_to_file()
+                self.save_model_to_file(file)
         elif save_mode & Vql.REPO:
             folder = self.ask_repository_save()
             if folder:
-                self.save_model_to_repository()
+                self.save_model_to_repository(folder)
 
     def on_reset(self):
         """
@@ -485,20 +487,20 @@ class VQLManagerWindow(QMainWindow):
             self.message_to_user("No sub folders found")
             return ''
 
-        part_logger = ''
+        # part_logger = list()
         for sub_folder in matching_folders:
-            file_to_check = path.join(folder, sub_folder, 'part') + '.log'
-            if path.isfile(file_to_check):
-                file = self.read_file(file_to_check)
-                part_logger += file.strip() + '\n'
+            part_file_to_check = path.join(folder, sub_folder, 'part') + '.log'
+            if path.isfile(part_file_to_check):
+                file = self.read_file(part_file_to_check)
+                part_logger = file.split('\n')
+                for file_to_check in part_logger:
+                    if file_to_check:
+                        if not path.isfile(file_to_check):
+                            self.message_to_user("File: " + file_to_check +
+                                                 " not found. Make sure your repository is not corrupt")
+                            return ''
             else:
-                self.message_to_user("File: " + file_to_check +
-                                     " not found. Make sure your repository is not corrupt")
-                return ''
-
-        for file_to_check in part_logger[:-1].split('\n'):
-            if not path.isfile(file_to_check):
-                self.message_to_user("File: " + file_to_check +
+                self.message_to_user("Part.log file: " + part_file_to_check +
                                      " not found. Make sure your repository is not corrupt")
                 return ''
         return folder
@@ -608,22 +610,22 @@ class VQLManagerWindow(QMainWindow):
         :return: Boolean if allowed
         :rtype: bool
         """
-        if self.all_chapters_treeview.changed:
-            msg = QMessageBox(self)
-            msg.setWindowTitle("Warning")
-            msg.setIcon(QMessageBox.Question)
-            msg.setText("<strong>Drop the changes?<strong>")
-            msg.setInformativeText("You are opening another repository,"
-                                   " that will discard any changes you made?"
-                                   "Click OK to proceed, and drop the changes.")
-            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-            msg.setDefaultButton(QMessageBox.Cancel)
-            if msg.exec() == QMessageBox.Ok:
-                return True
-            else:
-                return False
-        else:
+        if not self.all_chapters_treeview.changed:
             return True
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Warning")
+        msg.setIcon(QMessageBox.Question)
+        msg.setText("<strong>Drop the changes?<strong>")
+        msg.setInformativeText("You are opening another repository,"
+                               " that will discard any changes you made?"
+                               "Click OK to proceed, and drop the changes.")
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        msg.setDefaultButton(QMessageBox.Cancel)
+        if msg.exec() == QMessageBox.Ok:
+            return True
+        else:
+            return False
 
     def error_message_box(self, title, text, e):
         """
@@ -807,6 +809,7 @@ class VQLManagerWindow(QMainWindow):
             self.update_tree_widgets()
             tree.blockSignals(False)
         self.statusBar.showMessage("Ready")
+        return True
 
     def load_model_from_repository(self, folder):
         """
