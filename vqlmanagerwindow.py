@@ -425,6 +425,8 @@ class VQLManagerWindow(QMainWindow):
                 self.command_txtEdit.setText(command)
                 self.command_text_edit_label.setText("Command: " + file_name)
 
+    # dialogs for opening and saving
+
     def ask_file_open(self):
         """
         Function to ask which file to open to via a dialog
@@ -573,6 +575,8 @@ class VQLManagerWindow(QMainWindow):
         else:
             return filename
 
+    # General purpose dialogs
+
     def message_to_user(self, message):
         """
         General Messagebox
@@ -648,6 +652,8 @@ class VQLManagerWindow(QMainWindow):
         msg.setDefaultButton(QMessageBox.Ok)
         msg.exec()
 
+    # Helper function for io to disk
+
     def clear_export_folder(self, folder):
         """
         Removes all files in a repository
@@ -665,6 +671,123 @@ class VQLManagerWindow(QMainWindow):
             except OSError as e:
                 self.error_message_box("Error", "An error occurred during the removal of files in the folder: "
                                        + self.base_repository_folder, e)
+
+    def read_file(self, file):
+        """
+        General function to read in a file
+        :param file: The path to the file
+        :type file: str
+        :return: The contents of the file as string
+        :rtype: str
+        """
+        content = None
+        try:
+            with open(file, 'r') as f:
+                content = f.read(content)
+        except OSError as e:
+            self.error_message_box("Error", "An error occurred during reading of file: " + file, e)
+        return content
+
+    def write_file(self, file, content):
+        """
+        General function to write a file to disk
+        :param file: the path where the file should be written to
+        :type file: str
+        :param content: The content to be written as string
+        :type content: str
+        :return: Boolean on success
+        :rtype: bool
+        """
+        ok = False
+        try:
+            with open(file, 'x') as f:
+                f.write(content)
+                ok = True
+        except OSError as e:
+            self.error_message_box("Error", "An error occurred during writing of file: " + file, e)
+        return ok
+
+    def read_vql_folder(self, folder):
+        """
+        Helper function to the load_model_from_folder function
+        This function actually reads all files in the repository and loads the contents in the all_chapters_treeview
+        :param folder: The base folder of the repository
+        :return: nothing
+        """
+        tree = self.all_chapters_treeview
+        tree.set_base_folder(folder)
+        content = ''
+        for chapter_name, chapter in tree.chapters.items():
+            content += chapter.header
+            part_log_filepath, part_log_content = chapter.get_part_log()
+            if path.isfile(part_log_filepath):
+                part_logs = self.read_file(part_log_filepath).split('\n')
+                for file in part_logs:
+                    if path.isfile(file):
+                        content += self.read_file(file)
+        return content
+
+    # Saving and loading models
+
+    def load_model_from_file(self, file):
+        """
+        Function to load a single .vql file into the VqlModel instance: all_chapters_treeview
+        via its parse function. This function is called after all checks have been done
+        :return: nothing
+        """
+
+        if not file:
+            self.message_to_user("No file found")
+            return False
+
+        self.statusBar.showMessage("Loading model")
+        mode = self.get_mode()
+        tree = self.all_chapters_treeview
+        content = self.read_file(file)
+
+        if content:
+            tree.blockSignals(True)
+            if mode & Vql.SELECT:
+                tree.tree_reset()
+            elif mode & Vql.COMPARE:
+                tree.tree_reset_compare()
+
+            tree.parse(content, mode)
+            self.update_tree_widgets()
+            tree.blockSignals(False)
+        self.statusBar.showMessage("Ready")
+        return True
+
+    def load_model_from_repository(self, folder):
+        """
+        Function to load a repository folder structure into the VqlModel instance: all_chapters_treeview
+        via the read_vql_folder function. This function is called after all checks have been done
+        :return: nothing
+        """
+
+        if not folder:
+            self.message_to_user("No folder found")
+            return False
+
+        mode = self.get_mode()
+        tree = self.all_chapters_treeview
+
+        self.statusBar.showMessage("Loading model")
+        content = self.read_vql_folder(folder)
+        if content:
+            tree.blockSignals(True)
+            if mode & Vql.SELECT:
+                tree.tree_reset()
+            elif mode & Vql.COMPARE:
+                tree.tree_reset_compare()
+            tree.parse(content, mode)
+            self.update_tree_widgets()
+            tree.blockSignals(False)
+        else:
+            self.statusBar.showMessage("Ready")
+            return False
+        self.statusBar.showMessage("Ready")
+        return True
 
     def save_model_to_file(self, file):
         """
@@ -747,120 +870,7 @@ class VQLManagerWindow(QMainWindow):
         self.statusBar.showMessage("Ready")
         return True
 
-    def read_file(self, file):
-        """
-        General function to read in a file
-        :param file: The path to the file
-        :type file: str
-        :return: The contents of the file as string
-        :rtype: str
-        """
-        content = None
-        try:
-            with open(file, 'r') as f:
-                content = f.read(content)
-        except OSError as e:
-            self.error_message_box("Error", "An error occurred during reading of file: " + file, e)
-        return content
-
-    def write_file(self, file, content):
-        """
-        General function to write a file to disk
-        :param file: the path where the file should be written to
-        :type file: str
-        :param content: The content to be written as string
-        :type content: str
-        :return: Boolean on success
-        :rtype: bool
-        """
-        ok = False
-        try:
-            with open(file, 'x') as f:
-                f.write(content)
-                ok = True
-        except OSError as e:
-            self.error_message_box("Error", "An error occurred during writing of file: " + file, e)
-        return ok
-
-    def load_model_from_file(self, file):
-        """
-        Function to load a single .vql file into the VqlModel instance: all_chapters_treeview
-        via its parse function. This function is called after all checks have been done
-        :return: nothing
-        """
-
-        if not file:
-            self.message_to_user("No file found")
-            return False
-
-        self.statusBar.showMessage("Loading model")
-        mode = self.get_mode()
-        tree = self.all_chapters_treeview
-        content = self.read_file(file)
-
-        if content:
-            tree.blockSignals(True)
-            if mode & Vql.SELECT:
-                tree.tree_reset()
-            elif mode & Vql.COMPARE:
-                tree.tree_reset_compare()
-
-            tree.parse(content, mode)
-            self.update_tree_widgets()
-            tree.blockSignals(False)
-        self.statusBar.showMessage("Ready")
-        return True
-
-    def load_model_from_repository(self, folder):
-        """
-        Function to load a repository folder structure into the VqlModel instance: all_chapters_treeview
-        via the read_vql_folder function. This function is called after all checks have been done
-        :return: nothing
-        """
-
-        if not folder:
-            self.message_to_user("No folder found")
-            return False
-
-        mode = self.get_mode()
-        tree = self.all_chapters_treeview
-
-        self.statusBar.showMessage("Loading model")
-        content = self.read_vql_folder(folder)
-        if content:
-            tree.blockSignals(True)
-            if mode & Vql.SELECT:
-                tree.tree_reset()
-            elif mode & Vql.COMPARE:
-                tree.tree_reset_compare()
-            tree.parse(content, mode)
-            self.update_tree_widgets()
-            tree.blockSignals(False)
-        else:
-            self.statusBar.showMessage("Ready")
-            return False
-        self.statusBar.showMessage("Ready")
-        return True
-
-    def read_vql_folder(self, folder):
-        """
-        Helper function to the load_model_from_folder function
-        This function actually reads all files in the repository and loads the contents in the all_chapters_treeview
-        :param folder: The base folder of the repository
-        :return: nothing
-        """
-        tree = self.all_chapters_treeview
-        tree.set_base_folder(folder)
-        content = ''
-        for chapter_name, chapter in tree.chapters.items():
-            content += chapter.header
-            part_log_filepath, part_log_content = chapter.get_part_log()
-            if path.isfile(part_log_filepath):
-                part_logs = self.read_file(part_log_filepath).split('\n')
-                for file in part_logs:
-                    if path.isfile(file):
-                        content += self.read_file(file)
-        return content
+    # Update screen
 
     def update_tree_widgets(self):
         """
