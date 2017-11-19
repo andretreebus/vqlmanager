@@ -117,7 +117,3 @@ def show_mode(mode):
             mode_txt.append(name)
 
     return ' : '.join(mode_txt)
-
-
-
-

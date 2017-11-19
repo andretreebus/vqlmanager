@@ -60,8 +60,6 @@ class VqlModel(QTreeWidget):
         # initialize by adding empty chapters
         self._add_chapters(CHAPTER_NAMES)
         self.changed = False
-        self.new_objects = list()
-        self.to_add = list()
 
         self.view_mode = 0
         # self.base_model_path = ''
@@ -189,15 +187,32 @@ class VqlModel(QTreeWidget):
         :return: yields the following components: chapter_name, object_name, object_code, is_already_in_model, is_same
         """
 
+        def add_compared_part():
+            def compare():
+                local_is_already_in_model = False
+                local_is_same = False
+                for code_item in chapter.code_items:
+                    if code_item.object_name == object_name:
+                        local_is_already_in_model = True
+                        if code_item.get_code() == object_code:
+                            local_is_same = True
+                return local_is_already_in_model, local_is_same
+
+            new_objects.append(object_name)
+            is_already_in_model, is_same = compare()
+            if is_already_in_model:
+                if is_same:  # object not changed
+                    pass
+                else:  # object changed
+                    to_add.append((object_name, object_code, YELLOW))
+            else:  # object is new item
+                to_add.append((object_name, object_code, GREEN))
+
         length = len(file_content)
         if mode & (BASE_FILE | BASE_REPO):
             self.changed = False
-            # self.tree_reset()
             self.setHeaderLabel('Selection')
         elif mode & (COMP_FILE | COMP_REPO):
-            # self.tree_reset_compare()
-            self.new_objects = list()
-            self.to_add = list()
             self.setHeaderLabel('White: No change; Red: Lost; Green: New; Yellow: Changed')
 
         indices = [[chapter_name, file_content.find(chapter.header)]
@@ -210,65 +225,25 @@ class VqlModel(QTreeWidget):
                          if start[1] > 0]
 
         for chapter_name, chapter_part in chapter_parts:
+            new_objects = list()
+            to_add = list()
+            chapter = self.chapters[chapter_name]
             object_codes = [DELIMITER + code for code in chapter_part.split(DELIMITER)[1:]]
             object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
+
             for object_name, object_code in object_code:
-                if mode & (BASE_FILE | BASE_REPO):
+                if mode & (COMP_FILE | COMP_REPO):
+                    add_compared_part()
+                elif mode & (BASE_FILE | BASE_REPO):
                     self.add_code_part(chapter_name, object_name, object_code, WHITE)
-                elif mode & COMP_FILE | COMP_REPO:
-                    self.add_compared_part(chapter_name, object_name, object_code)
 
-        if mode & (COMP_FILE | COMP_REPO):
-            self.check_deleted_items()
-            for chapter_name, object_name, object_code, color in self.to_add:
-                self.add_code_part(chapter_name, object_name, object_code, color)
+            if mode & (COMP_FILE | COMP_REPO):
+                for item in chapter.code_items:
+                    if item.object_name not in new_objects:
+                        item.set_color(RED)
 
-    def check_deleted_items(self):
-        """
-
-        :return:
-        """
-        # all items in the model that are not in model2
-        for chapter_name, chapter in self.chapters.items():
-            for item in chapter.code_items:
-                if item.object_name not in self.new_objects:
-                    item.set_color(RED)
-
-    def compare(self, chapter_name, object_name, object_code):
-        """
-
-        :param chapter_name:
-        :param object_name:
-        :param object_code:
-        :return:
-        """
-        is_already_in_model = False
-        is_same = False
-        chapter = self.chapters[chapter_name]
-        for code_item in chapter.code_items:
-            if code_item.object_name == object_name:
-                is_already_in_model = True
-                if code_item.get_code() == object_code:
-                    is_same = True
-        return is_already_in_model, is_same
-
-    def add_compared_part(self, chapter_name, object_name, object_code):
-        """
-
-        :param chapter_name:
-        :param object_name:
-        :param object_code:
-        :return:
-        """
-        self.new_objects.append(object_name)
-        is_already_in_model, is_same = self.compare(chapter_name, object_name, object_code)
-        if is_already_in_model:
-            if is_same:   # object not changed
-                pass
-            else:      # object changed
-                self.to_add.append((chapter_name, object_name, object_code, YELLOW))
-        else:   # object is new item
-            self.to_add.append((chapter_name, object_name, object_code, GREEN))
+                for object_name, object_code, color in to_add:
+                    self.add_code_part(chapter_name, object_name, object_code, color)
 
     def tree_reset(self):
         """
@@ -384,65 +359,62 @@ class VqlModel(QTreeWidget):
         :return: nothing
         """
 
-        def translate_colors(item_color, to_text):
-            """
-            Function for translating item QBrush objects for strings
-            This is needed because the set function does not accept unhashable items
-            :param item_color: the object to be translated
-            :type item_color: str or QBrush
-            :param to_text: indicator for the direction of the tranlation
-            :type to_text: bool
-            :return: Translated value
-            :rtype: QBrush or str
-            """
-            color = None
-            if to_text:
-                if item_color == RED:
-                    color = 'red'
-                elif item_color == GREEN:
-                    color = 'green'
-                elif item_color == YELLOW:
-                    color = 'yellow'
-                elif item_color == WHITE:
-                    color = 'white'
-            else:
-                if item_color == 'red':
-                    color = RED
-                elif item_color == 'green':
-                    color = GREEN
-                elif item_color == 'yellow':
-                    color = YELLOW
-                elif item_color == 'white':
-                    color = WHITE
-            return color
-
-        def update_chapter_colors(local_chapter_item):
+        def update_chapter_colors():
             """
             Helper function for the update_colors function
             this function figures out the colors of the chapter items and sets them
-            :param local_chapter_item: the chapter item
-            :type local_chapter_item: QTreeWidgetItem
+            :param chapter_item: the chapter item
             :return: nothing
             """
-            unique_colors_in_chapter = set()
-            children = (local_chapter_item.child(j) for j in range(local_chapter_item.childCount()))
-            child_colors = [translate_colors(child.data(0, Qt.ForegroundRole), True) for child in children]
-            for color in child_colors:
-                unique_colors_in_chapter.add(color)
+
+            def translate_colors(item_color, to_text=True):
+                """
+                Function for translating item QBrush objects for strings
+                This is needed because the set function does not accept unhashable items
+                :param item_color: the object to be translated
+                :type item_color: str or QBrush
+                :param to_text: indicator for the direction of the tranlation
+                :type to_text: bool
+                :return: Translated value
+                :rtype: QBrush or str
+                """
+                color = None
+                if to_text:
+                    if item_color == RED:
+                        color = 'red'
+                    elif item_color == GREEN:
+                        color = 'green'
+                    elif item_color == YELLOW:
+                        color = 'yellow'
+                    elif item_color == WHITE:
+                        color = 'white'
+                else:
+                    if item_color == 'red':
+                        color = RED
+                    elif item_color == 'green':
+                        color = GREEN
+                    elif item_color == 'yellow':
+                        color = YELLOW
+                    elif item_color == 'white':
+                        color = WHITE
+                return color
+            children = (chapter_item.child(j) for j in range(chapter_item.childCount()))
+            child_colors = (translate_colors(child.data(0, Qt.ForegroundRole), to_text=True) for child in children)
+            unique_colors_in_chapter = {color for color in child_colors}
 
             length = len(unique_colors_in_chapter)
-            if length == 0:
-                if mode & BASE_LOADED:
+            if length == 0:  # no items found, so these are items not found in the new items
+                if mode & COMP_LOADED:
                     chapter_color = RED
                 else:
                     chapter_color = WHITE
-            elif length == 1:
-                chapter_color = translate_colors(list(unique_colors_in_chapter)[0], False)
+            elif length == 1:  # all items the same color , use that color
+                chapter_color = translate_colors(list(unique_colors_in_chapter)[0], to_text=False)
             else:
                 chapter_color = YELLOW
-            local_chapter_item.setForeground(0, chapter_color)
+            chapter_item.setForeground(0, chapter_color)
 
         root_item = tree.invisibleRootItem()
         for i in range(root_item.childCount()):
             chapter_item = root_item.child(i)
-            update_chapter_colors(chapter_item)
+            update_chapter_colors()

@@ -149,7 +149,7 @@ class VQLManagerWindow(QMainWindow):
         self.selected_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.selected_treeview.setSelectionMode(QAbstractItemView.NoSelection)
         self.selected_treeview.setUniformRowHeights(True)
-        self.selected_treeview.setHeaderLabel('Selection Pane')
+        self.selected_treeview.setHeaderLabel('View Pane')
         self.selected_treeview.setToolTip("Selected parts: Click to view source code")
         self.selected_treeview.setToolTipDuration(2000)
         self.selected_treeview.setIconSize(QSize(16, 16))
@@ -315,6 +315,8 @@ class VQLManagerWindow(QMainWindow):
                     self.on_reset(GUI_NONE)
                     self.switch_to_mode(GUI_NONE)
                     self.on_open(new_mode)  # recurse to the begin
+                else:
+                    return
             else:  # ok we can load
                 if new_mode & BASE_FILE:
                     file = self.ask_file_open()
@@ -322,6 +324,8 @@ class VQLManagerWindow(QMainWindow):
                         if self.load_model_from_file(file, BASE_FILE):
                             self.base_repository_file = file
                             new_mode |= BASE_LOADED
+                            self.switch_to_mode(new_mode)
+                            self.update_tree_widgets()
                             self.working_folder = path.dirname(file)
                         else:
                             return
@@ -333,6 +337,8 @@ class VQLManagerWindow(QMainWindow):
                         if self.load_model_from_repository(folder, BASE_REPO):
                             self.base_repository_folder = folder
                             new_mode |= BASE_LOADED
+                            self.switch_to_mode(new_mode)
+                            self.update_tree_widgets()
                             self.working_folder = folder
                         else:
                             return
@@ -345,13 +351,18 @@ class VQLManagerWindow(QMainWindow):
                     if self.ask_drop_changes():
                         self.on_reset(GUI_COMPARE)
                         self.on_open(new_mode)  # recurse to the begin
+                    else:
+                        return
                 else:  # ok we can load
                     if new_mode & COMP_FILE:
                         file = self.ask_file_open()
                         if file:
                             if self.load_model_from_file(file, COMP_FILE):
                                 self.compare_repository_file = file
-                                new_mode |= COMP_LOADED
+                                current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
+                                new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_FILE
+                                self.switch_to_mode(new_mode)
+                                self.update_tree_widgets()
                             else:
                                 return
                         else:
@@ -361,7 +372,10 @@ class VQLManagerWindow(QMainWindow):
                         if folder:
                             if self.load_model_from_repository(folder, COMP_REPO):
                                 self.compare_repository_folder = folder
-                                new_mode |= COMP_LOADED
+                                current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
+                                new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_REPO
+                                self.switch_to_mode(new_mode)
+                                self.update_tree_widgets()
                             else:
                                 return
                         else:
@@ -369,10 +383,6 @@ class VQLManagerWindow(QMainWindow):
             else:
                 self.message_to_user("No repository loaded yet")
                 return
-
-        if not current_mode == new_mode:
-            self.switch_to_mode(new_mode)
-            self.update_tree_widgets()
 
     def on_save(self, save_mode):
         """
@@ -743,10 +753,11 @@ class VQLManagerWindow(QMainWindow):
         """
         tree = self.all_chapters_treeview
         tree.set_base_folder(folder)
-        content = ''
+        content = PROP_QUOTE
         for chapter_name, chapter in tree.chapters.items():
             content += chapter.header
-            part_log_filepath, part_log_content = chapter.get_part_log()
+            part_log_filepath, _ = chapter.get_part_log()
+
             if path.isfile(part_log_filepath):
                 part_logs = self.read_file(part_log_filepath).split('\n')
                 for file in part_logs:
@@ -907,6 +918,8 @@ class VQLManagerWindow(QMainWindow):
         When big changes are made (when whole chapters are unselected) the function is not redrawing the screen to often
         :return: nothing
         """
+        blocked = self.all_chapters_treeview.signalsBlocked()
+        self.all_chapters_treeview.blockSignals(True)
         self.update_timer.stop()
         col = 0
         tree = self.selected_treeview
@@ -916,7 +929,7 @@ class VQLManagerWindow(QMainWindow):
         current_mode = self.get_mode()
         new_chapter = None
         expanded = [chapter_name for chapter_name, chapter in tree_all.chapters.items() if chapter.isExpanded()]
-        for is_chapter, item in tree_all.selected_items(self.get_mode()):
+        for is_chapter, item in tree_all.selected_items(current_mode):
             if is_chapter:
                 new_chapter = CodeItem.make_selected_treeview_item(root, col, item.name, 'chapter', WHITE)
                 if item.name in expanded:
@@ -927,4 +940,7 @@ class VQLManagerWindow(QMainWindow):
                                                              item.get_code(), item.get_color())
 
         VqlModel.update_colors(self.all_chapters_treeview, current_mode)
-        VqlModel.update_colors(self.selected_treeview, current_mode)
+        VqlModel.update_colors(tree, current_mode)
+        self.all_chapters_treeview.blockSignals(blocked)
+
+
