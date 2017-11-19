@@ -14,14 +14,15 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
 
+from vql_manager_core import *
 from collections import OrderedDict
-from PyQt5.QtCore import Qt
+# from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QWidget
 # from PyQt5.QtWidgets import QSizePolicy
 from PyQt5.QtWidgets import QTreeWidget
 from chapter import Chapter
-from vql_manager_core import VqlConstants as Vql
+# from vql_manager_core import VqlConstants as Vql
 
 
 class VqlModel(QTreeWidget):
@@ -57,16 +58,16 @@ class VqlModel(QTreeWidget):
         self.chapters = OrderedDict()
 
         # initialize by adding empty chapters
-        self._add_chapters(Vql.CHAPTER_NAMES)
+        self._add_chapters(CHAPTER_NAMES)
         self.changed = False
         self.new_objects = list()
         self.to_add = list()
 
         self.view_mode = 0
-        self.base_model_path = ''
-        self.base_model_type = ''
-        self.compare_model_path = ''
-        self.compare_model_type = ''
+        # self.base_model_path = ''
+        # self.base_model_type = ''
+        # self.compare_model_path = ''
+        # self.compare_model_type = ''
 
     def set_base_folder(self, base_folder):
         """
@@ -117,7 +118,7 @@ class VqlModel(QTreeWidget):
         :rtype: str
         """
 
-        code = Vql.PROP_QUOTE
+        code = PROP_QUOTE
         for chapter_name, chapter in self.chapters.items():
             chapter_code = chapter.get_code_as_file(selected)
             if chapter_code:
@@ -163,15 +164,15 @@ class VqlModel(QTreeWidget):
             if not chapter.is_selected():
                 continue
 
-            if mode & Vql.SELECT:
+            if mode & GUI_SELECT:
                 yield True, chapter
                 for code_item in chapter.code_items:
                     if code_item.is_selected():
                         yield False, code_item
-            elif mode & Vql.COMPARE:
+            elif mode & GUI_COMPARE:
                 items = list()
                 for code_item in chapter.code_items:
-                    if code_item.is_selected() and not code_item.get_color() == Vql.WHITE:
+                    if code_item.is_selected() and not code_item.get_color() == WHITE:
                         items.append(code_item)
                 if items:
                     yield True, chapter
@@ -189,15 +190,15 @@ class VqlModel(QTreeWidget):
         """
 
         length = len(file_content)
-        if mode & Vql.SELECT:
+        if mode & (BASE_FILE | BASE_REPO):
             self.changed = False
-            self.tree_reset()
-            # self.setHeaderLabel('Selection')
-        elif mode & Vql.COMPARE:
-            self.tree_reset_compare()
+            # self.tree_reset()
+            self.setHeaderLabel('Selection')
+        elif mode & (COMP_FILE | COMP_REPO):
+            # self.tree_reset_compare()
             self.new_objects = list()
             self.to_add = list()
-            # self.setHeaderLabel('Difference')
+            self.setHeaderLabel('White: No change; Red: Lost; Green: New; Yellow: Changed')
 
         indices = [[chapter_name, file_content.find(chapter.header)]
                    for chapter_name, chapter in self.chapters.items()]
@@ -209,15 +210,15 @@ class VqlModel(QTreeWidget):
                          if start[1] > 0]
 
         for chapter_name, chapter_part in chapter_parts:
-            object_codes = [Vql.DELIMITER + code for code in chapter_part.split(Vql.DELIMITER)[1:]]
+            object_codes = [DELIMITER + code for code in chapter_part.split(DELIMITER)[1:]]
             object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
             for object_name, object_code in object_code:
-                if mode & Vql.SELECT:
-                    self.add_code_part(chapter_name, object_name, object_code, Vql.WHITE)
-                elif mode & Vql.COMPARE:
+                if mode & (BASE_FILE | BASE_REPO):
+                    self.add_code_part(chapter_name, object_name, object_code, WHITE)
+                elif mode & COMP_FILE | COMP_REPO:
                     self.add_compared_part(chapter_name, object_name, object_code)
 
-        if mode & Vql.COMPARE:
+        if mode & (COMP_FILE | COMP_REPO):
             self.check_deleted_items()
             for chapter_name, object_name, object_code, color in self.to_add:
                 self.add_code_part(chapter_name, object_name, object_code, color)
@@ -231,7 +232,7 @@ class VqlModel(QTreeWidget):
         for chapter_name, chapter in self.chapters.items():
             for item in chapter.code_items:
                 if item.object_name not in self.new_objects:
-                    item.set_color(Vql.RED)
+                    item.set_color(RED)
 
     def compare(self, chapter_name, object_name, object_code):
         """
@@ -265,9 +266,9 @@ class VqlModel(QTreeWidget):
             if is_same:   # object not changed
                 pass
             else:      # object changed
-                self.to_add.append((chapter_name, object_name, object_code, Vql.YELLOW))
+                self.to_add.append((chapter_name, object_name, object_code, YELLOW))
         else:   # object is new item
-            self.to_add.append((chapter_name, object_name, object_code, Vql.GREEN))
+            self.to_add.append((chapter_name, object_name, object_code, GREEN))
 
     def tree_reset(self):
         """
@@ -283,13 +284,13 @@ class VqlModel(QTreeWidget):
         self.root = self.invisibleRootItem()
         self.clear()
         # initialize by adding empty chapters
-        self._add_chapters(Vql.CHAPTER_NAMES)
+        self._add_chapters(CHAPTER_NAMES)
 
         # base_folder for storing as a repository
         self.set_base_folder('')
         self.changed = False
 
-        self.setHeaderLabel('Selection')
+        # self.setHeaderLabel('Selection')
 
     def tree_reset_compare(self):
         """
@@ -373,11 +374,13 @@ class VqlModel(QTreeWidget):
         return filename
 
     @staticmethod
-    def update_colors(tree):
+    def update_colors(tree, mode):
         """
         Update the colors of the two tree objects
         :param tree: Reference to the QTreeWidget
         :type tree: QTreeWidget
+        :param mode: Reference to the current mode
+        :type mode: int
         :return: nothing
         """
 
@@ -394,23 +397,23 @@ class VqlModel(QTreeWidget):
             """
             color = None
             if to_text:
-                if item_color == Vql.RED:
+                if item_color == RED:
                     color = 'red'
-                elif item_color == Vql.GREEN:
+                elif item_color == GREEN:
                     color = 'green'
-                elif item_color == Vql.YELLOW:
+                elif item_color == YELLOW:
                     color = 'yellow'
-                elif item_color == Vql.WHITE:
+                elif item_color == WHITE:
                     color = 'white'
             else:
                 if item_color == 'red':
-                    color = Vql.RED
+                    color = RED
                 elif item_color == 'green':
-                    color = Vql.GREEN
+                    color = GREEN
                 elif item_color == 'yellow':
-                    color = Vql.YELLOW
+                    color = YELLOW
                 elif item_color == 'white':
-                    color = Vql.WHITE
+                    color = WHITE
             return color
 
         def update_chapter_colors(local_chapter_item):
@@ -429,11 +432,14 @@ class VqlModel(QTreeWidget):
 
             length = len(unique_colors_in_chapter)
             if length == 0:
-                chapter_color = Vql.RED
+                if mode & BASE_LOADED:
+                    chapter_color = RED
+                else:
+                    chapter_color = WHITE
             elif length == 1:
                 chapter_color = translate_colors(list(unique_colors_in_chapter)[0], False)
             else:
-                chapter_color = Vql.YELLOW
+                chapter_color = YELLOW
             local_chapter_item.setForeground(0, chapter_color)
 
         root_item = tree.invisibleRootItem()

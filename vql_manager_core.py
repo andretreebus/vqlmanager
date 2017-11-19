@@ -16,69 +16,107 @@ from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
 
 
-class VqlConstants(QObject):
-    # convenience names for class constants
-    # checkbox option in the tree widgets
-    PART_STATE = Qt.PartiallyChecked
-    CHECKED = Qt.Checked
-    UNCHECKED = Qt.Unchecked
+# class VqlConstants(QObject):
+# convenience names for class constants
+# checkbox option in the tree widgets
+PART_STATE = Qt.PartiallyChecked
+CHECKED = Qt.Checked
+UNCHECKED = Qt.Unchecked
 
-    # Hint for the width of the tree wigets
-    PANE_WIDTH = 300
+# Hint for the width of the tree wigets
+PANE_WIDTH = 300
 
-    # # application modes en flags
+# # application modes en flags
 
-    # colors used
-    RED = QBrush(QColor("#ff4444"))
-    GREEN = QBrush(QColor("#44ff44"))
-    YELLOW = QBrush(QColor("#ffff44"))
-    WHITE = QBrush(QColor("#cccccc"))
+# colors used
+RED = QBrush(QColor("#ff4444"))
+GREEN = QBrush(QColor("#44ff44"))
+YELLOW = QBrush(QColor("#ffff44"))
+WHITE = QBrush(QColor("#cccccc"))
 
-    # item flags for the all_chapters and selection tree widget items
-    ITEM_FLAG_ALL = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
-    ITEM_FLAG_SEL = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+# item flags for the all_chapters and selection tree widget items
+ITEM_FLAG_ALL = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
+ITEM_FLAG_SEL = Qt.ItemIsSelectable | Qt.ItemIsEnabled
 
-    # main chapter names as used in Denodo code
-    CHAPTER_NAMES = ['I18N MAPS', 'DATABASE', 'FOLDERS', 'LISTENERS JMS', 'DATASOURCES', 'WRAPPERS',
-                     'STORED PROCEDURES', 'TYPES', 'MAPS', 'BASE VIEWS', 'VIEWS', 'ASSOCIATIONS',
-                     'WEBSERVICES', 'WIDGETS', 'WEBCONTAINER WEB SERVICE DEPLOYMENTS',
-                     'WEBCONTAINER WIDGET DEPLOYMENTS']
+# main chapter names as used in Denodo code
+CHAPTER_NAMES = ['I18N MAPS', 'DATABASE', 'FOLDERS', 'LISTENERS JMS', 'DATASOURCES', 'WRAPPERS',
+                 'STORED PROCEDURES', 'TYPES', 'MAPS', 'BASE VIEWS', 'VIEWS', 'ASSOCIATIONS',
+                 'WEBSERVICES', 'WIDGETS', 'WEBCONTAINER WEB SERVICE DEPLOYMENTS',
+                 'WEBCONTAINER WIDGET DEPLOYMENTS']
 
-    # the delimiter use to separate chapters into CodeItems
-    DELIMITER = "CREATE OR REPLACE"
+# the delimiter use to separate chapters into CodeItems
+DELIMITER = "CREATE OR REPLACE"
 
-    # Start quote of the Denodo script
-    PROP_QUOTE = '# REQUIRES-PROPERTIES-FILE - # Do not remove this comment!\n#\n'
-
-    class Mode(QObject):
-        NONE = 0
-        SELECT = 1 << 1
-        COMPARE = 1 << 2
-        BASE_MODEL_FILE = 1 << 3
-        BASE_MODEL_REPO = 1 << 4
-        COMP_MODEL_FILE = 1 << 5
-        COMP_MODEL_REPO = 1 << 6
-        BASE_MODEL_LOADED = 1 << 7
-        COMP_MODEL_LOADED = 1 << 8
-        FILE = 1 << 9
-        REPO = 1 << 10
-    Q_FLAGS(Mode)
-
-    NONE = Mode.NONE
-    SELECT = Mode.SELECT
-    COMPARE = Mode.COMPARE
-    BASE_MODEL_FILE = Mode.BASE_MODEL_FILE
-    BASE_MODEL_REPO = Mode.BASE_MODEL_REPO
-    COMP_MODEL_FILE = Mode.COMP_MODEL_FILE
-    COMP_MODEL_REPO = Mode.COMP_MODEL_REPO
-    BASE_MODEL_LOADED = Mode.BASE_MODEL_LOADED
-    COMP_MODEL_LOADED = Mode.COMP_MODEL_LOADED
-    FILE = Mode.FILE
-    REPO = Mode.REPO
+# Start quote of the Denodo script
+PROP_QUOTE = '# REQUIRES-PROPERTIES-FILE - # Do not remove this comment!\n#\n'
 
 
+# app_state flags
+class GuiType(QObject):
+    GUI_NONE = 1 << 1                  # initial or reset mode
+    GUI_SELECT = 1 << 2           # gui set to selection mode
+    GUI_COMPARE = 1 << 3          # gui set to compare, with a base model and a compare model
 
 
+class ModelState(QObject):
+    BASE_FILE = 1 << 4        # indicate that the base model is a single file
+    BASE_REPO = 1 << 5        # indicate that the base model is a repository (folder structure)
+    COMP_FILE = 1 << 6        # indicate that the base model is a single file
+    COMP_REPO = 1 << 7        # indicate that the base model is a repository (folder structure)
+    BASE_LOADED = 1 << 8      # indicate that the base model is loaded
+    COMP_LOADED = 1 << 9      # indicate that the compare model is loaded
+
+
+class SourceType(QObject):
+    FILE = 1 << 10
+    REPO = 1 << 11
+
+
+Q_FLAGS(GuiType)
+Q_FLAGS(ModelState)
+Q_FLAGS(SourceType)
+
+GUI_NONE = GuiType.GUI_NONE
+GUI_SELECT = GuiType.GUI_SELECT
+GUI_COMPARE = GuiType.GUI_COMPARE
+
+BASE_FILE = ModelState.BASE_FILE
+BASE_REPO = ModelState.BASE_REPO
+COMP_FILE = ModelState.COMP_FILE
+COMP_REPO = ModelState.COMP_REPO
+BASE_LOADED = ModelState.BASE_LOADED
+COMP_LOADED = ModelState.COMP_LOADED
+
+FILE = SourceType.FILE
+REPO = SourceType.REPO
+
+
+def show_mode(mode):
+    """
+
+    :param mode:
+    :return:
+    """
+    gui_types = {GUI_NONE: 'GUI_NONE', GUI_SELECT: 'GUI_SELECT', GUI_COMPARE: 'GUI_COMPARE'}
+    model_states = {BASE_FILE: 'BASE_FILE', BASE_REPO: 'BASE_REPO', COMP_FILE: 'COMP_FILE', COMP_REPO: 'COMP_REPO',
+                    BASE_LOADED: 'BASE_LOADED', COMP_LOADED: 'COMP_LOADED'}
+    source_types = {FILE: 'FILE', REPO: 'REPO'}
+
+    mode_txt = list()
+
+    for num, name in gui_types.items():
+        if mode & num:
+            mode_txt.append(name)
+
+    for num, name in model_states.items():
+        if mode & num:
+            mode_txt.append(name)
+
+    for num, name in source_types.items():
+        if mode & num:
+            mode_txt.append(name)
+
+    return ' : '.join(mode_txt)
 
 
 

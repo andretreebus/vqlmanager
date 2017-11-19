@@ -21,11 +21,12 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
 
+from vql_manager_core import *
 from os import path
-from PyQt5.QtCore import Qt, QVariant
+from PyQt5.QtCore import QVariant
+# from PyQt5.QtCore import Qt, QVariant
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
-from vql_manager_core import VqlConstants as Vql
 
 
 class CodeItem(QTreeWidgetItem):
@@ -48,15 +49,15 @@ class CodeItem(QTreeWidgetItem):
 
         super(CodeItem, self).__init__(parent)
 
-        self.setCheckState(0, Vql.CHECKED)
+        self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
-        self.setFlags(Vql.ITEM_FLAG_ALL)
+        self.setFlags(ITEM_FLAG_ALL)
         self.object_name = object_name
         self.setText(0, object_name)
         self._code = code
         self.setData(0, Qt.UserRole, code)
         self._sub_folder = None
-        self.color = Vql.WHITE
+        self.color = WHITE
         if color:
             self.setForeground(0, color)
         else:
@@ -105,7 +106,7 @@ class CodeItem(QTreeWidgetItem):
         :return: Boolean
         :rtype: bool
         """
-        if self.checkState(0) == Vql.CHECKED:
+        if self.checkState(0) == CHECKED:
             return True
         else:
             CodeItem.changed = True
@@ -161,10 +162,10 @@ class CodeItem(QTreeWidgetItem):
         """
 
         item = QTreeWidgetItem(parent)
-        item.setCheckState(col, Vql.CHECKED)
+        item.setCheckState(col, CHECKED)
         item.setData(col, Qt.CheckStateRole, QVariant())
         item.childIndicatorPolicy = 2
-        item.setFlags(Vql.ITEM_FLAG_SEL)
+        item.setFlags(ITEM_FLAG_SEL)
         item.setText(col, text)
         item.setData(col, Qt.UserRole, user_data)
         item.setForeground(0, color)
