@@ -127,7 +127,7 @@ class VQLManagerWindow(QMainWindow):
         self.setIconSize(QSize(32, 32))
         self.setWindowIcon(QIcon(self._root + '/images/splitter.png'))
         self.setWindowTitle("VQL Manager")
-        self.setWindowFlags(Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
+        # self.setWindowFlags(Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
         # initialize mainwidget and layout
         self.layout.setContentsMargins(23, 23, 23, 23)
         self.layout.setSpacing(8)
@@ -807,11 +807,6 @@ class VQLManagerWindow(QMainWindow):
 
         if content:
             tree.blockSignals(True)
-            # if mode & GUI_SELECT:
-            #     tree.tree_reset()
-            # elif mode & GUI_COMPARE:
-            #     tree.tree_reset_compare()
-
             tree.parse(content, mode)
             self.update_tree_widgets()
             tree.blockSignals(False)
@@ -825,21 +820,21 @@ class VQLManagerWindow(QMainWindow):
         :return: nothing
         """
 
-        # if not folder:
-        #     self.message_to_user("No folder found")
-        #     return False
-
-        # mode = self.get_mode()
         tree = self.all_chapters_treeview
-
         self.statusBar.showMessage("Loading model")
-        content = self.read_vql_folder(folder)
+
+        content = PROP_QUOTE
+        for chapter in tree.chapters:
+            content += chapter.header
+            part_log_filepath, _ = chapter.get_part_log(folder)
+            if path.isfile(part_log_filepath):
+                part_logs = self.read_file(part_log_filepath).split('\n')
+                files = [self.read_file(file) for file in part_logs if path.isfile(file)]
+                content += ''.join(files)
+
+        # content = self.read_vql_folder(folder)
         if content:
             tree.blockSignals(True)
-            # if mode & GUI_SELECT:
-            #     tree.tree_reset()
-            # elif mode & GUI_COMPARE:
-            #     tree.tree_reset_compare()
             tree.parse(content, mode)
             self.update_tree_widgets()
             tree.blockSignals(False)
@@ -891,7 +886,6 @@ class VQLManagerWindow(QMainWindow):
 
         tree = self.all_chapters_treeview
         tree.blockSignals(True)
-        # tree.set_base_folder(folder)
 
         for part_log_filepath, part_log_content in tree.get_part_logs(folder):
 
@@ -923,7 +917,7 @@ class VQLManagerWindow(QMainWindow):
                 self.statusBar.showMessage("Save Error")
                 return False
             if not self.write_file(path.normpath(file_path), content):
-               self.statusBar.showMessage("Save Error")
+                self.statusBar.showMessage("Save Error")
                 return False
 
         tree.blockSignals(False)
@@ -950,17 +944,18 @@ class VQLManagerWindow(QMainWindow):
         root = tree.invisibleRootItem()
         tree.clear()
         current_mode = self.get_mode()
-        new_chapter = None
-        expanded = [chapter_name for chapter_name, chapter in tree_all.chapters.items() if chapter.isExpanded()]
-        for is_chapter, item in tree_all.selected_items(current_mode):
-            if is_chapter:
-                new_chapter = CodeItem.make_selected_treeview_item(root, col, item.name, 'chapter', WHITE)
-                if item.name in expanded:
-                    new_chapter.setExpanded(True)
-            else:
-                if current_mode & BASE_LOADED:
-                    _ = CodeItem.make_selected_treeview_item(new_chapter, col, item.object_name,
-                                                             item.get_code(), item.get_color())
+
+        expanded = [chapter.name for chapter in tree_all.chapters if chapter.isExpanded()]
+        chapter_list = [(chapter, CodeItem.make_selected_treeview_item(root, col, chapter.name, 'chapter', WHITE))
+                        for chapter in tree_all.chapters if chapter.is_selected()]
+
+        new_code_items = [(chapter_sel, chapter_all.selected_items()) for chapter_all, chapter_sel in chapter_list]
+        for parent, items in new_code_items:
+            for item in items:
+                new_item = CodeItem.make_selected_treeview_item(
+                    parent, col, item.object_name, item.code, item.color)
+            if parent.text(col) in expanded:
+                parent.setExpanded(True)
 
         VqlModel.update_colors(self.all_chapters_treeview, current_mode)
         VqlModel.update_colors(tree, current_mode)

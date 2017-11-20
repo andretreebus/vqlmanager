@@ -52,52 +52,29 @@ class Chapter(QTreeWidgetItem):
         self.name = name
         self.setText(0, name)
         self.setData(0, Qt.UserRole, 'chapter')
-        self.header = self._header(name)
-
-        # self._base_folder = None
-        # self._sub_folder = None
-
+        self.header = self.make_header(name)
         self.code_items = list()
 
-    def get_dir(self, folder):
+    def get_file_path(self, folder):
         return path.normpath(path.join(folder, self.name.replace(' ', '_')))
 
-    # def set_base_folder(self, base_folder):
-    #     """
-    #     Function sets the base folder of the repository
-    #     :param base_folder: string path to the folder
-    #     :type base_folder: str
-    #     :return: nothing
-    #     """
-    #     if base_folder:
-    #         self._base_folder = base_folder
-    #         self._sub_folder = path.join(base_folder, str.replace(self.name, ' ', '_'))
-    #         for code_item in self.code_items:
-    #             code_item.set_sub_folder(self._sub_folder)
-    #     else:
-    #         self._base_folder = None
-
-    def _get_code_as_file(self, selected):
+    def get_code_as_file(self, selected):
         """
         Function returns the combined Denodo code from a whole chapter.
         This function does not add a chapter header
         :return: string with code content
         :rtype: str
         """
-        code = ''
-        if selected:
-            if self.is_selected():
-                for code_item in self.code_items:
-                    code += code_item.get_code_as_file(selected)
-            else:
-                for code_item in self.code_items:
-                    code += code_item.get_code_as_file(selected)
-        return code
+        if selected and self.is_selected():
+            code = [code_item.code for code_item in self.selected_items()]
+        else:
+            code = [code_item.code for code_item in self.code_items]
+        return self.header + '\n'.join(code)
 
     @staticmethod
-    def _header(chapter_name):
+    def make_header(chapter_name):
         """
-        Constructs a string that can be used to identify chapters in a Denodo exported databse file
+        Constructs a string that can be used to identify chapters in a Denodo exported database file
         :param chapter_name: string with Chapter name
         :type chapter_name: str
         :return: The chapter Header
@@ -107,7 +84,7 @@ class Chapter(QTreeWidgetItem):
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
 
-    def add_code_item(self, file_name, code, color):
+    def add_code_item(self, file_name, code, color, mode):
         """
         Function to construct and store a CodeItem in this Chapter
         :param file_name: string of the code item's file name
@@ -116,10 +93,12 @@ class Chapter(QTreeWidgetItem):
         :type code: str
         :param color: the color of the item
         :type color: QBrush
+        :param mode: the color of the item
+        :type mode: int
         :return: nothing
 
         """
-        code_item = CodeItem(self, file_name, code, color)
+        code_item = CodeItem(self, file_name, code, color, mode)
         self.code_items.append(code_item)
 
     def get_part_log(self, folder):
@@ -132,29 +111,11 @@ class Chapter(QTreeWidgetItem):
         :rtype: str, str
         """
 
-        sub_folder = self.get_dir(folder)
+        sub_folder = self.get_file_path(folder)
         part_log_filepath = path.normpath(path.join(sub_folder, 'part.log'))
         part_log = [code_item.get_file_path(sub_folder) for code_item in self.code_items if code_item.is_selected()]
         part_log_content = '\n'.join(part_log)
         return part_log_filepath, part_log_content
-
-    def get_code_as_file(self, selected):
-        """
-        Function returns the combined Denodo code from a whole chapter.
-        This function adds a chapter header
-        :return: string with code content
-        :rtype: str
-        """
-
-        if selected:
-            if self.is_selected():
-                code = self._get_code_as_file(selected)
-                if code:
-                    return self.header + code
-        else:
-            code = self._get_code_as_file(selected)
-            if code:
-                return self.header + code
 
     def is_selected(self):
         """
@@ -173,9 +134,8 @@ class Chapter(QTreeWidgetItem):
         :return: Iterator
         :rtype: CodeItem
         """
-        for code_item in self.code_items:
-            if code_item.is_selected():
-                yield code_item
+        items = [code_item for code_item in self.code_items if code_item.is_selected()]
+        return items
 
     def tree_reset(self):
         """
@@ -187,5 +147,3 @@ class Chapter(QTreeWidgetItem):
 
         self.code_items = list()
         _ = self.takeChildren()
-        # self._base_folder = None
-        # self._sub_folder = None

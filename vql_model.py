@@ -15,14 +15,10 @@ Last edited: November 2017
 """
 
 from vql_manager_core import *
-from collections import OrderedDict
-# from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QWidget
-# from PyQt5.QtWidgets import QSizePolicy
 from PyQt5.QtWidgets import QTreeWidget
 from chapter import Chapter
-# from vql_manager_core import VqlConstants as Vql
 
 
 class VqlModel(QTreeWidget):
@@ -49,31 +45,16 @@ class VqlModel(QTreeWidget):
         # root is the first/parent node for all QTreeWidgetItem children
         self.root = self.invisibleRootItem()
 
-        # base_folder for storing as a repository
-        # self._base_folder = None
-
         # chapters must be ordered, so no normal dict here
         # keys   : string with the chapter_name
         # values : the Chapter objects
-        self.chapters = OrderedDict()
+        # self.chapters = OrderedDict()
+        self.chapters = list()
 
         # initialize by adding empty chapters
         self._add_chapters(CHAPTER_NAMES)
         self.changed = False
-
-    # def set_base_folder(self, base_folder):
-    #     """
-    #     Sets the repository base folder
-    #     :param base_folder: string repository path
-    #     :type base_folder:str
-    #     :return: nothing
-    #     """
-    #     if base_folder:
-    #         self._base_folder = base_folder
-    #         for chapter_name, chapter in self.chapters.items():
-    #             chapter.set_base_folder(base_folder)
-    #     else:
-    #         self._base_folder = ''
+        self.mode = GUI_NONE
 
     def _add_chapters(self, chapter_names):
         """
@@ -84,24 +65,26 @@ class VqlModel(QTreeWidget):
         """
         for chapter_name in chapter_names:
             chapter = Chapter(self.root, chapter_name)
-            self.chapters[chapter_name] = chapter
+            self.chapters.append(chapter)
 
-    def add_code_part(self, chapter_name, object_name, code, color):
+    def add_code_part(self, chapter, object_name, code, color, mode):
         """
         Adds a CodeItem to a chapter
-        :param chapter_name: string chapter name, key in the chapters dictionary
-        :type chapter_name: str
+        :param chapter: string chapter name, key in the chapters dictionary
+        :type chapter: Chapter
         :param object_name: string file_name of the bit of code in the repository
         :type object_name: str
         :param code: string actual Denodo code for one Denodo object
         :type code: str
         :param color: the color of the item
         :type color: QBrush
+        :param mode: the context type of code part, subset of modes
+        :type mode: int
         :return: nothing
         """
 
-        chapter = self.chapters[chapter_name]
-        chapter.add_code_item(object_name, code, color)
+        # chapter = self.chapters[chapter_name]
+        chapter.add_code_item(object_name, code, color, mode)
 
     def get_code_as_file(self, selected):
         """
@@ -109,13 +92,8 @@ class VqlModel(QTreeWidget):
         :return: string of code content
         :rtype: str
         """
-
-        code = PROP_QUOTE
-        for chapter_name, chapter in self.chapters.items():
-            chapter_code = chapter.get_code_as_file(selected)
-            if chapter_code:
-                code += chapter_code
-        return code
+        code = [chapter get_code(selected) for chapter in self.chapters]
+        return PROP_QUOTE + '\n'.join(code)
 
     def get_part_logs(self, folder):
         """
@@ -123,15 +101,9 @@ class VqlModel(QTreeWidget):
         The content is a list of paths to the code items in a chapter
         This function is used to create a repository
         :return: Iterator with filepaths and content
-        :rtype: str, str
+        :rtype: generator of tuples: part_log_filepath, part_log_content
         """
-        result = list()
-        for chapter_name, chapter in self.chapters.items():
-            if chapter.is_selected and chapter.childCount() > 0:
-                part_log_filepath, part_log_content = chapter.get_part_log(folder)
-
-                result.append((part_log_filepath, part_log_content))
-
+        result = (chapter.get_part_log(folder) for chapter in self.chapters if chapter.is_selected())
         return result
 
     def get_selected_code_files(self, folder):
@@ -141,39 +113,71 @@ class VqlModel(QTreeWidget):
         :return: an iterator with two unpacked values: filepath and code content
         :rtype: str, str
         """
-        for chapter_name, chapter in self.chapters.items():
-            if chapter.is_selected():
-                for code_item in chapter.code_items:
-                    if code_item.is_selected():
-                        yield code_item.get_file_path(folder), code_item.get_code()
+        return ((code_item.get_file_path(folder), code_item.code)
+                for code_item in (chapter.code_items for chapter in self.chapters if chapter.is_selected()))
 
-    def selected_items(self, mode):
-        """
-        Generator for looping over all selected code items in the model
-        This function is used to write the repository
-        :return: an iterator with 2 unpacked values: a boolean indicator if the file is a Chapter object
-        :rtype: bool, QTreeWidgetItem
-        If not, it is a CodeItem object.
-        The second value is the item itself
-        """
-        for chapter_name, chapter in self.chapters.items():
-            if not chapter.is_selected():
-                continue
+    def get_chapter_by_name(self, chapter_name):
+        for chapter in self.chapters:
+            if chapter.name == chapter_name:
+                return chapter
 
-            if mode & GUI_SELECT:
-                yield True, chapter
-                for code_item in chapter.code_items:
-                    if code_item.is_selected():
-                        yield False, code_item
-            elif mode & GUI_COMPARE:
-                items = list()
-                for code_item in chapter.code_items:
-                    if code_item.is_selected():   # and not code_item.get_color() == WHITE:
-                        items.append(code_item)
-                if items:
-                    yield True, chapter
-                    for item in items:
-                        yield False, item
+    # def selected_items(self, mode):
+    #     """
+    #     Generator for looping over all selected code items in the model
+    #     This function is used to write the repository
+    #     :return: an iterator with 2 unpacked values: a boolean indicator if the file is a Chapter object
+    #     :rtype: bool, QTreeWidgetItem
+    #     If not, it is a CodeItem object.
+    #     The second value is the item itself
+    #     """
+    #     for chapter in self.chapters:
+    #         if not chapter.is_selected():
+    #             continue
+    #
+    #         if mode & GUI_SELECT:
+    #             yield True, chapter
+    #             for code_item in chapter.code_items:
+    #                 if code_item.is_selected():
+    #                     yield False, code_item
+    #         elif mode & GUI_COMPARE:
+    #             items = list()
+    #             for code_item in chapter.code_items:
+    #                 if code_item.is_selected():   # and not code_item.get_color() == WHITE:
+    #                     items.append(code_item)
+    #             if items:
+    #                 yield True, chapter
+    #                 for item in items:
+    #                     yield False, item
+    @staticmethod
+    def compare(chapter, object_name, object_code):
+        color = GREEN
+        for code_item in chapter.code_items:
+            if code_item.object_name == object_name:
+                color = YELLOW
+                if code_item.get_code() == object_code:
+                    color = WHITE
+        return color
+
+    # @staticmethod
+    # def add_compared_part(chapter, object_name, object_code):
+    #     color = self.compare(chapter, object_name, object_code)
+    #     return (object_name, object_code, color)
+
+    def switch_mode(self, new_mode):
+        if new_mode & GUI_NONE:
+            self.setHeaderLabel('')
+            self.setToolTip('No model loaded, Open a file or repository')
+        if new_mode & GUI_SELECT:
+            self.setHeaderLabel('Selection Pane')
+            self.setToolTip('Check the parts you like to select')
+        elif new_mode & GUI_COMPARE:
+            self.setHeaderLabel('Compare Pane')
+            tip = '<span style=\"background-color:white;\">Same Object</span></br>' \
+                '<span style=\"background-color:red;\">Removed Object</span></br>' \
+                '<span style=\"background-color:green;\">New Object</span></br>' \
+                '<span style=\"background-color:yellow;\">Code Change</span>'
+            self.setToolTip(tip)
+            # self.setToolTip('White:No change; Red:Lost; Green:New; Yellow:Changed')
 
     def parse(self, file_content, mode):
         """
@@ -184,64 +188,31 @@ class VqlModel(QTreeWidget):
         :param mode: int
         :return: yields the following components: chapter_name, object_name, object_code, is_already_in_model, is_same
         """
+        self.changed = False
 
-        def add_compared_part():
-            def compare():
-                local_is_already_in_model = False
-                local_is_same = False
-                for code_item in chapter.code_items:
-                    if code_item.object_name == object_name:
-                        local_is_already_in_model = True
-                        if code_item.get_code() == object_code:
-                            local_is_same = True
-                return local_is_already_in_model, local_is_same
-
-            new_objects.append(object_name)
-            is_already_in_model, is_same = compare()
-            if is_already_in_model:
-                if is_same:  # object not changed
-                    pass
-                else:  # object changed
-                    to_add.append((object_name, object_code, YELLOW))
-            else:  # object is new item
-                to_add.append((object_name, object_code, GREEN))
-
-        length = len(file_content)
-        if mode & (BASE_FILE | BASE_REPO):
-            self.changed = False
-            self.setHeaderLabel('Selection')
-        elif mode & (COMP_FILE | COMP_REPO):
-            self.setHeaderLabel('White: No change; Red: Lost; Green: New; Yellow: Changed')
-
-        indices = [[chapter_name, file_content.find(chapter.header)]
-                   for chapter_name, chapter in self.chapters.items()]
-
-        indices.append(['', length])
-
-        chapter_parts = [[start[0], file_content[start[1]:end[1]]]
-                         for start, end in zip(indices[:-1], indices[1:])
-                         if start[1] > 0]
+        indices = [[chapter.name, file_content.find(chapter.header)] for chapter in self.chapters]
+        indices.append(['', len(file_content)])
+        chapter_parts = [[start[0], file_content[start[1]:end[1]]]  # extract chapter_name and the content code
+                         for start, end in zip(indices[:-1], indices[1:])  # loop over the indices, and those shifted
+                         if start[1] > 0]  # if found
 
         for chapter_name, chapter_part in chapter_parts:
-            new_objects = list()
-            to_add = list()
-            chapter = self.chapters[chapter_name]
-            object_codes = [DELIMITER + code for code in chapter_part.split(DELIMITER)[1:]]
-            object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
+            chapter = self.get_chapter_by_name(chapter_name)
+            if chapter:
+                object_codes = (DELIMITER + code for code in chapter_part.split(DELIMITER)[1:])
+                object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
 
-            for object_name, object_code in object_code:
                 if mode & (COMP_FILE | COMP_REPO):
-                    add_compared_part()
+                    to_add = [[name, code, self.compare(chapter, name, code)] for name, code in object_code]
+                    new_objects = [name for name, code, color in to_add]
+                    for item in chapter.code_items:
+                        if item.object_name not in new_objects:
+                            item.set_color(RED)
+                    for name, code, color in to_add:
+                        self.add_code_part(chapter, name, code, color, mode)
                 elif mode & (BASE_FILE | BASE_REPO):
-                    self.add_code_part(chapter_name, object_name, object_code, WHITE)
-
-            if mode & (COMP_FILE | COMP_REPO):
-                for item in chapter.code_items:
-                    if item.object_name not in new_objects:
-                        item.set_color(RED)
-
-                for object_name, object_code, color in to_add:
-                    self.add_code_part(chapter_name, object_name, object_code, color)
+                    for name, code in object_code:
+                        self.add_code_part(chapter, name, code, WHITE, mode)
 
     def tree_reset(self):
         """
@@ -249,10 +220,10 @@ class VqlModel(QTreeWidget):
         :return: nothing
         """
 
-        for chapter in self.chapters.values():
+        for chapter in self.chapters:
             chapter.tree_reset()
 
-        self.chapters = OrderedDict()
+        self.chapters = list()
         # root is the first/parent node for all QTreeWidgetItem children
         self.root = self.invisibleRootItem()
         self.clear()

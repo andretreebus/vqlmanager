@@ -35,7 +35,7 @@ class CodeItem(QTreeWidgetItem):
     Basically a bag for pieces of Denodo code
     """
 
-    def __init__(self, parent, object_name, code, color=None):
+    def __init__(self, parent, object_name, code, color, mode):
         """
         Class initializer
         :param parent: reference to the owner of the code, a Chapter object
@@ -53,54 +53,33 @@ class CodeItem(QTreeWidgetItem):
         self.setFlags(ITEM_FLAG_ALL)
         self.object_name = object_name
         self.setText(0, object_name)
-        self._code = code
+        self.code = code
         self.setData(0, Qt.UserRole, code)
-        # self._sub_folder = None
-        self.color = None
-        if color:
-            self.set_color(color)
-        else:
-            self.set_color(WHITE)
+        self.color = color
+        self.mode = mode
         self.setForeground(0, self.color)
 
-    # def set_sub_folder(self, sub_folder):
-    #     """
-    #     Set the folder where this codeItem resides
-    #     :param sub_folder: string with file path
-    #     :type sub_folder:str
-    #     :return: nothing
-    #     """
-    #     self._sub_folder = sub_folder
 
     def get_file_path(self, folder):
         """
-        Function returns the whole file path
-        :return: string file path
-        :rtype: str
-        """
 
+        :param folder:
+        :return:
+        """
         file_name = path.normpath(path.join(folder, self.object_name.replace(' ', '_') + '.vql'))
         return file_name
 
-    def get_code(self):
-        """
-        Function returning the code
-        :return: string code content
-        :rtype: str
-        """
-        return self._code
-
-    def get_code_as_file(self, selected):
+    def get_code(self, selected):
         """
         Function returns code if selected
         :return: string code content
         :rtype: str
         """
         if selected:
-            if self.is_selected:
-                return self._code
+            if self.is_selected():
+                return self.code
         else:
-            return self._code
+            return self.code
 
     def is_selected(self):
         """
@@ -111,7 +90,6 @@ class CodeItem(QTreeWidgetItem):
         if self.checkState(0) == CHECKED:
             return True
         else:
-            CodeItem.changed = True
             return False
 
     def tree_reset(self):
@@ -119,11 +97,10 @@ class CodeItem(QTreeWidgetItem):
         Function for deleting/resetting this item
         :return: nothing
         """
-        self.object_name = None
+        self.object_name = ''
         self.setText(0, '')
-        self._code = None
+        self.code = ''
         self.setData(0, Qt.UserRole, '')
-        # self._sub_folder = None
 
     def set_color(self, color):
         """
@@ -135,13 +112,13 @@ class CodeItem(QTreeWidgetItem):
         self.color = color
         self.setForeground(0, color)
 
-    def get_color(self):
-        """
-        Returns the color of the item
-        :return: QBrush
-        :rtype: QBrush
-        """
-        return self.color
+    # def get_color(self):
+    #     """
+    #     Returns the color of the item
+    #     :return: QBrush
+    #     :rtype: QBrush
+    #     """
+    #     return self.color
 
     @staticmethod
     def make_selected_treeview_item(parent, col, text, user_data, color):
