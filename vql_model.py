@@ -50,7 +50,7 @@ class VqlModel(QTreeWidget):
         self.root = self.invisibleRootItem()
 
         # base_folder for storing as a repository
-        self._base_folder = None
+        # self._base_folder = None
 
         # chapters must be ordered, so no normal dict here
         # keys   : string with the chapter_name
@@ -61,25 +61,19 @@ class VqlModel(QTreeWidget):
         self._add_chapters(CHAPTER_NAMES)
         self.changed = False
 
-        self.view_mode = 0
-        # self.base_model_path = ''
-        # self.base_model_type = ''
-        # self.compare_model_path = ''
-        # self.compare_model_type = ''
-
-    def set_base_folder(self, base_folder):
-        """
-        Sets the repository base folder
-        :param base_folder: string repository path
-        :type base_folder:str
-        :return: nothing
-        """
-        if base_folder:
-            self._base_folder = base_folder
-            for chapter_name, chapter in self.chapters.items():
-                chapter.set_base_folder(base_folder)
-        else:
-            self._base_folder = ''
+    # def set_base_folder(self, base_folder):
+    #     """
+    #     Sets the repository base folder
+    #     :param base_folder: string repository path
+    #     :type base_folder:str
+    #     :return: nothing
+    #     """
+    #     if base_folder:
+    #         self._base_folder = base_folder
+    #         for chapter_name, chapter in self.chapters.items():
+    #             chapter.set_base_folder(base_folder)
+    #     else:
+    #         self._base_folder = ''
 
     def _add_chapters(self, chapter_names):
         """
@@ -123,7 +117,7 @@ class VqlModel(QTreeWidget):
                 code += chapter_code
         return code
 
-    def get_part_logs(self):
+    def get_part_logs(self, folder):
         """
         Generator with log file names (key) and their content (values)
         The content is a list of paths to the code items in a chapter
@@ -131,12 +125,16 @@ class VqlModel(QTreeWidget):
         :return: Iterator with filepaths and content
         :rtype: str, str
         """
+        result = list()
         for chapter_name, chapter in self.chapters.items():
             if chapter.is_selected and chapter.childCount() > 0:
-                part_log_filepath, part_log_content = chapter.get_part_log()
-                yield part_log_filepath, part_log_content
+                part_log_filepath, part_log_content = chapter.get_part_log(folder)
 
-    def get_selected_code_files(self):
+                result.append((part_log_filepath, part_log_content))
+
+        return result
+
+    def get_selected_code_files(self, folder):
         """
         Generator for looping over all selected code items in the model
         This function is used to write the repository
@@ -147,7 +145,7 @@ class VqlModel(QTreeWidget):
             if chapter.is_selected():
                 for code_item in chapter.code_items:
                     if code_item.is_selected():
-                        yield code_item.get_file_path(), code_item.get_code()
+                        yield code_item.get_file_path(folder), code_item.get_code()
 
     def selected_items(self, mode):
         """
@@ -170,7 +168,7 @@ class VqlModel(QTreeWidget):
             elif mode & GUI_COMPARE:
                 items = list()
                 for code_item in chapter.code_items:
-                    if code_item.is_selected(): # and not code_item.get_color() == WHITE:
+                    if code_item.is_selected():   # and not code_item.get_color() == WHITE:
                         items.append(code_item)
                 if items:
                     yield True, chapter
@@ -262,7 +260,7 @@ class VqlModel(QTreeWidget):
         self._add_chapters(CHAPTER_NAMES)
 
         # base_folder for storing as a repository
-        self.set_base_folder('')
+        # self.set_base_folder('')
         self.changed = False
 
         # self.setHeaderLabel('Selection')
@@ -363,7 +361,6 @@ class VqlModel(QTreeWidget):
             """
             Helper function for the update_colors function
             this function figures out the colors of the chapter items and sets them
-            :param chapter_item: the chapter item
             :return: nothing
             """
 

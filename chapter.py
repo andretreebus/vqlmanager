@@ -54,25 +54,28 @@ class Chapter(QTreeWidgetItem):
         self.setData(0, Qt.UserRole, 'chapter')
         self.header = self._header(name)
 
-        self._base_folder = None
-        self._sub_folder = None
+        # self._base_folder = None
+        # self._sub_folder = None
 
         self.code_items = list()
 
-    def set_base_folder(self, base_folder):
-        """
-        Function sets the base folder of the repository
-        :param base_folder: string path to the folder
-        :type base_folder: str
-        :return: nothing
-        """
-        if base_folder:
-            self._base_folder = base_folder
-            self._sub_folder = path.join(base_folder, str.replace(self.name, ' ', '_'))
-            for code_item in self.code_items:
-                code_item.set_sub_folder(self._sub_folder)
-        else:
-            self._base_folder = None
+    def get_dir(self, folder):
+        return path.normpath(path.join(folder, self.name.replace(' ', '_')))
+
+    # def set_base_folder(self, base_folder):
+    #     """
+    #     Function sets the base folder of the repository
+    #     :param base_folder: string path to the folder
+    #     :type base_folder: str
+    #     :return: nothing
+    #     """
+    #     if base_folder:
+    #         self._base_folder = base_folder
+    #         self._sub_folder = path.join(base_folder, str.replace(self.name, ' ', '_'))
+    #         for code_item in self.code_items:
+    #             code_item.set_sub_folder(self._sub_folder)
+    #     else:
+    #         self._base_folder = None
 
     def _get_code_as_file(self, selected):
         """
@@ -119,7 +122,7 @@ class Chapter(QTreeWidgetItem):
         code_item = CodeItem(self, file_name, code, color)
         self.code_items.append(code_item)
 
-    def get_part_log(self):
+    def get_part_log(self, folder):
         """
         Function returning two values: the file path for the part.log file and its content as a string
         The content is a list of file paths pointing to the code items in this chapter
@@ -128,11 +131,10 @@ class Chapter(QTreeWidgetItem):
         :return: Two values, a file path and the content of the part.log file of this chapter
         :rtype: str, str
         """
-        part_log = list()
-        for code_item in self.code_items:
-            if code_item.is_selected:
-                part_log.append(code_item.get_file_path())
-        part_log_filepath = path.join(self._sub_folder, 'part') + '.log'
+
+        sub_folder = self.get_dir(folder)
+        part_log_filepath = path.normpath(path.join(sub_folder, 'part.log'))
+        part_log = [code_item.get_file_path(sub_folder) for code_item in self.code_items if code_item.is_selected()]
         part_log_content = '\n'.join(part_log)
         return part_log_filepath, part_log_content
 
@@ -185,5 +187,5 @@ class Chapter(QTreeWidgetItem):
 
         self.code_items = list()
         _ = self.takeChildren()
-        self._base_folder = None
-        self._sub_folder = None
+        # self._base_folder = None
+        # self._sub_folder = None

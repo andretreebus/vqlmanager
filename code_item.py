@@ -24,7 +24,6 @@ Last edited: November 2017
 from vql_manager_core import *
 from os import path
 from PyQt5.QtCore import QVariant
-# from PyQt5.QtCore import Qt, QVariant
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
 
@@ -56,29 +55,32 @@ class CodeItem(QTreeWidgetItem):
         self.setText(0, object_name)
         self._code = code
         self.setData(0, Qt.UserRole, code)
-        self._sub_folder = None
-        self.color = WHITE
+        # self._sub_folder = None
+        self.color = None
         if color:
-            self.setForeground(0, color)
+            self.set_color(color)
         else:
-            self.setForeground(0, self.color)
+            self.set_color(WHITE)
+        self.setForeground(0, self.color)
 
-    def set_sub_folder(self, sub_folder):
-        """
-        Set the folder where this codeItem resides
-        :param sub_folder: string with file path
-        :type sub_folder:str
-        :return: nothing
-        """
-        self._sub_folder = sub_folder
+    # def set_sub_folder(self, sub_folder):
+    #     """
+    #     Set the folder where this codeItem resides
+    #     :param sub_folder: string with file path
+    #     :type sub_folder:str
+    #     :return: nothing
+    #     """
+    #     self._sub_folder = sub_folder
 
-    def get_file_path(self):
+    def get_file_path(self, folder):
         """
         Function returns the whole file path
         :return: string file path
         :rtype: str
         """
-        return path.join(self._sub_folder, self.object_name)
+
+        file_name = path.normpath(path.join(folder, self.object_name.replace(' ', '_') + '.vql'))
+        return file_name
 
     def get_code(self):
         """
@@ -121,7 +123,7 @@ class CodeItem(QTreeWidgetItem):
         self.setText(0, '')
         self._code = None
         self.setData(0, Qt.UserRole, '')
-        self._sub_folder = None
+        # self._sub_folder = None
 
     def set_color(self, color):
         """

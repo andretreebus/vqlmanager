@@ -13,8 +13,7 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
 
-from os import path, makedirs, listdir, unlink
-from shutil import rmtree
+from os import path, makedirs, listdir, unlink, rmdir
 from vql_manager_core import *
 
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer
@@ -124,11 +123,11 @@ class VQLManagerWindow(QMainWindow):
 
         self.resize(1200, 800)
         self.setMinimumSize(QSize(860, 440))
-        self.setMaximumSize(QSize(1920, 1080))
+        # self.setMaximumSize(QSize(1920, 1080))
         self.setIconSize(QSize(32, 32))
         self.setWindowIcon(QIcon(self._root + '/images/splitter.png'))
         self.setWindowTitle("VQL Manager")
-
+        self.setWindowFlags(Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
         # initialize mainwidget and layout
         self.layout.setContentsMargins(23, 23, 23, 23)
         self.layout.setSpacing(8)
@@ -418,6 +417,8 @@ class VQLManagerWindow(QMainWindow):
         elif reset_mode & GUI_COMPARE:
             self.all_chapters_treeview.tree_reset_compare()
         self.update_tree_widgets()
+        self.command_txtEdit.setText('')
+        self.command_text_edit_label.setText('Command: ')
         self.switch_to_mode(GUI_NONE)
 
     def on_selection_changed(self, item, *_):
@@ -475,6 +476,7 @@ class VQLManagerWindow(QMainWindow):
         if not filename:
             return ''
         filename = str(filename)
+        filename = path.normpath(filename)
 
         if not path.isfile(filename):
             self.message_to_user("File does not exist")
@@ -508,6 +510,7 @@ class VQLManagerWindow(QMainWindow):
             return ''
 
         folder = str(folder)
+        folder = path.normpath(folder)
 
         if not path.isdir(folder):
             self.message_to_user("No folder found")
@@ -522,7 +525,7 @@ class VQLManagerWindow(QMainWindow):
 
         # part_logger = list()
         for sub_folder in matching_folders:
-            part_file_to_check = path.join(folder, sub_folder, 'part') + '.log'
+            part_file_to_check = path.join(folder, sub_folder, 'part.log')
             if path.isfile(part_file_to_check):
                 file = self.read_file(part_file_to_check)
                 part_logger = file.split('\n')
@@ -562,6 +565,8 @@ class VQLManagerWindow(QMainWindow):
         if not folder:
             return ''
 
+        folder = path.normpath(folder)
+
         if not path.isdir(folder):
             try:
                 makedirs(folder)
@@ -576,6 +581,8 @@ class VQLManagerWindow(QMainWindow):
                 return folder
             else:
                 return ''
+
+        return folder
 
     def ask_file_save(self):
         """
@@ -599,6 +606,7 @@ class VQLManagerWindow(QMainWindow):
             return ''
 
         filename = str(filename)
+        filename = path.normpath(filename)
 
         if not ('.' in filename):
             filename = filename + '.vql'
@@ -691,6 +699,19 @@ class VQLManagerWindow(QMainWindow):
 
     # Helper function for io to disk
 
+    def remove_dir(self, base_folder):
+        """
+
+        :param base_folder:
+        :return:
+        """
+        for the_path in (path.join(base_folder, file) for file in listdir(base_folder)):
+            if path.isdir(the_path):
+                self.remove_dir(the_path)
+            else:
+                unlink(the_path)
+        rmdir(base_folder)
+
     def clear_export_folder(self, folder):
         """
         Removes all files in a repository
@@ -704,7 +725,7 @@ class VQLManagerWindow(QMainWindow):
                 if path.isfile(file_path):
                     unlink(file_path)
                 elif path.isdir(file_path):
-                    rmtree(file_path)
+                    self.remove_dir(file_path)
             except OSError as e:
                 self.error_message_box("Error", "An error occurred during the removal of files in the folder: "
                                        + self.base_repository_folder, e)
@@ -761,8 +782,9 @@ class VQLManagerWindow(QMainWindow):
             if path.isfile(part_log_filepath):
                 part_logs = self.read_file(part_log_filepath).split('\n')
                 for file in part_logs:
-                    if path.isfile(file):
-                        content += self.read_file(file)
+                    filepath = file
+                    if path.isfile(filepath):
+                        content += self.read_file(filepath)
         return content
 
     # Saving and loading models
@@ -869,17 +891,19 @@ class VQLManagerWindow(QMainWindow):
 
         tree = self.all_chapters_treeview
         tree.blockSignals(True)
-        tree.set_base_folder(folder)
+        # tree.set_base_folder(folder)
 
-        for part_log_filepath, part_log_content in tree.get_part_logs():
+        for part_log_filepath, part_log_content in tree.get_part_logs(folder):
+
             sub_folder, file = path.split(part_log_filepath)
             try:
                 makedirs(sub_folder)
             except OSError as e:
                 self.statusBar.showMessage("Save Error")
-                self.error_message_box("Error", "An error occurred during creation of the folders in : " +
-                                       sub_folder, e)
+                self.error_message_box("Error", "An error occurred during creation of the folders in : "
+                                       + sub_folder, e)
                 return False
+
             if not part_log_content:
                 self.statusBar.showMessage("Save Error")
                 return False
@@ -891,18 +915,17 @@ class VQLManagerWindow(QMainWindow):
             if not self.write_file(part_log_filepath, part_log_content):
                 self.statusBar.showMessage("Save Error")
                 return False
-
-        for file_path, content in tree.get_selected_code_files():
+        for file_path, content in tree.get_selected_code_files(folder):
             if not content:
                 self.statusBar.showMessage("Save Error")
                 return False
             if not file_path:
                 self.statusBar.showMessage("Save Error")
                 return False
-
-            if not self.write_file(file_path, content):
-                self.statusBar.showMessage("Save Error")
+            if not self.write_file(path.normpath(file_path), content):
+               self.statusBar.showMessage("Save Error")
                 return False
+
         tree.blockSignals(False)
 
         self.statusBar.showMessage("Ready")
@@ -942,5 +965,3 @@ class VQLManagerWindow(QMainWindow):
         VqlModel.update_colors(self.all_chapters_treeview, current_mode)
         VqlModel.update_colors(tree, current_mode)
         self.all_chapters_treeview.blockSignals(blocked)
-
-
