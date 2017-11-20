@@ -170,7 +170,7 @@ class VqlModel(QTreeWidget):
             elif mode & GUI_COMPARE:
                 items = list()
                 for code_item in chapter.code_items:
-                    if code_item.is_selected() and not code_item.get_color() == WHITE:
+                    if code_item.is_selected(): # and not code_item.get_color() == WHITE:
                         items.append(code_item)
                 if items:
                     yield True, chapter
