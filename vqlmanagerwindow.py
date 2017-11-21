@@ -291,6 +291,7 @@ class VQLManagerWindow(QMainWindow):
                     self.compare_repository_label.setText('File : ' + self.compare_repository_file)
                 elif new_mode & COMP_REPO:
                     self.compare_repository_label.setText('Repository : ' + self.compare_repository_folder)
+        self.all_chapters_treeview.switch_mode(new_mode)
         self._mode = new_mode
         self.statusBar.showMessage(show_mode(self._mode))
 
@@ -740,7 +741,7 @@ class VQLManagerWindow(QMainWindow):
         """
         content = None
         try:
-            with open(file, 'r') as f:
+            with open(path.normpath(file), 'r') as f:
                 content = f.read(content)
         except OSError as e:
             self.error_message_box("Error", "An error occurred during reading of file: " + file, e)
@@ -758,7 +759,7 @@ class VQLManagerWindow(QMainWindow):
         """
         ok = False
         try:
-            with open(file, 'x') as f:
+            with open(path.normpath(file), 'x') as f:
                 f.write(content)
                 ok = True
         except OSError as e:
@@ -935,28 +936,33 @@ class VQLManagerWindow(QMainWindow):
         When big changes are made (when whole chapters are unselected) the function is not redrawing the screen to often
         :return: nothing
         """
-        blocked = self.all_chapters_treeview.signalsBlocked()
-        self.all_chapters_treeview.blockSignals(True)
+        # stop the update timer
         self.update_timer.stop()
+        # store former "blocked" indicator
+        blocked = self.all_chapters_treeview.signalsBlocked()
+
+        # block signals while updating
+        self.all_chapters_treeview.blockSignals(True)
+
+        # convenience pointer names
         col = 0
         tree = self.selected_treeview
         tree_all = self.all_chapters_treeview
         root = tree.invisibleRootItem()
+        make_item = CodeItem.make_selected_treeview_item
         tree.clear()
-        current_mode = self.get_mode()
 
         expanded = [chapter.name for chapter in tree_all.chapters if chapter.isExpanded()]
-        chapter_list = [(chapter, CodeItem.make_selected_treeview_item(root, col, chapter.name, 'chapter', WHITE))
+        chapter_list = [(chapter, make_item(root, col, chapter.name, 'chapter', WHITE))
                         for chapter in tree_all.chapters if chapter.is_selected()]
 
-        new_code_items = [(chapter_sel, chapter_all.selected_items()) for chapter_all, chapter_sel in chapter_list]
-        for parent, items in new_code_items:
-            for item in items:
-                new_item = CodeItem.make_selected_treeview_item(
-                    parent, col, item.object_name, item.code, item.color)
+        code_items_to_copy = [(chapter_sel, chapter_all.selected_items()) for chapter_all, chapter_sel in chapter_list]
+        for parent, items in code_items_to_copy:
+            _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items]
             if parent.text(col) in expanded:
                 parent.setExpanded(True)
 
+        current_mode = self.get_mode()
         VqlModel.update_colors(self.all_chapters_treeview, current_mode)
         VqlModel.update_colors(tree, current_mode)
         self.all_chapters_treeview.blockSignals(blocked)

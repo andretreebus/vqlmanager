@@ -59,14 +59,13 @@ class CodeItem(QTreeWidgetItem):
         self.mode = mode
         self.setForeground(0, self.color)
 
-
     def get_file_path(self, folder):
         """
 
         :param folder:
         :return:
         """
-        file_name = path.normpath(path.join(folder, self.object_name.replace(' ', '_') + '.vql'))
+        file_name = path.join(folder, self.object_name.replace(' ', '_') + '.vql')
         return file_name
 
     def get_code(self, selected):

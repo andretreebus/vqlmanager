@@ -55,22 +55,7 @@ class Chapter(QTreeWidgetItem):
         self.header = self.make_header(name)
         self.code_items = list()
 
-    def get_file_path(self, folder):
-        return path.normpath(path.join(folder, self.name.replace(' ', '_')))
-
-    def get_code_as_file(self, selected):
-        """
-        Function returns the combined Denodo code from a whole chapter.
-        This function does not add a chapter header
-        :return: string with code content
-        :rtype: str
-        """
-        if selected and self.is_selected():
-            code = [code_item.code for code_item in self.selected_items()]
-        else:
-            code = [code_item.code for code_item in self.code_items]
-        return self.header + '\n'.join(code)
-
+    # General functions
     @staticmethod
     def make_header(chapter_name):
         """
@@ -84,11 +69,60 @@ class Chapter(QTreeWidgetItem):
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
 
-    def add_code_item(self, file_name, code, color, mode):
+    def is_selected(self):
+        """
+        Function returns if the chapter is selected or has some code items selected (tri state)
+        :return: Boolean
+        :rtype: bool
+        """
+        if self.checkState(0) in (PART_STATE, CHECKED) and len(self.code_items) > 0:
+            return True
+        else:
+            return False
+
+    def get_file_path(self, folder):
+        return path.normpath(path.join(folder, self.name.replace(' ', '_')))
+
+    def tree_reset(self):
+        """
+        Function for deleting/resetting this chapter
+        :return: nothing
+        """
+        for code_item in self.code_items:
+            code_item.tree_reset()
+
+        self.code_items = list()
+        _ = self.takeChildren()
+
+    def sort(self):
+
+        children = self.takeChildren()
+        base_children = [child for child in children if child.mode & (BASE_FILE | BASE_REPO)]
+        base_child_object_names = [child.object_name for child in children if child.mode & (BASE_FILE | BASE_REPO)]
+        comp_children = [child for child in children if child.mode & (COMP_FILE | COMP_REPO)]
+        index = 0
+        for comp_child in comp_children:
+            if comp_child.color == WHITE:
+                index = base_child_object_names.index(comp_child.object_name)
+
+            elif comp_child.color == YELLOW:
+                index = base_child_object_names.index(comp_child.object_name) +1
+                base_children.insert(index, comp_child)
+                base_child_object_names.insert(index, comp_child.object_name)
+
+            if comp_child.color == GREEN:
+                base_children.insert(index + 1, comp_child)
+                base_child_object_names.insert(index + 1, comp_child.object_name)
+
+
+        self.addChildren(base_children)
+
+    # import functions
+    def add_code_item(self, object_name, code, color, mode):
         """
         Function to construct and store a CodeItem in this Chapter
-        :param file_name: string of the code item's file name
-        :type file_name: str
+        :param object_name: string of the code item's file name
+        :type object_name: str
         :param code: string with code content of the code item
         :type code: str
         :param color: the color of the item
@@ -98,9 +132,28 @@ class Chapter(QTreeWidgetItem):
         :return: nothing
 
         """
-        code_item = CodeItem(self, file_name, code, color, mode)
+
+        code_item = CodeItem(self, object_name, code, color, mode)
         self.code_items.append(code_item)
 
+    # export functions
+    # to file
+    def get_code_as_file(self, selected):
+        """
+        Function returns the combined Denodo code from a whole chapter.
+        This function does not add a chapter header
+        :param selected: Indicator is True if only selected items are requested
+        :type selected: bool
+        :return: string with code content
+        :rtype: str
+        """
+        if selected and self.is_selected():
+            code = [code_item.code for code_item in self.code_items if code_item.is_selected()]
+        else:
+            code = [code_item.code for code_item in self.code_items]
+        return self.header + '\n'.join(code)
+
+    # to repository
     def get_part_log(self, folder):
         """
         Function returning two values: the file path for the part.log file and its content as a string
@@ -117,33 +170,14 @@ class Chapter(QTreeWidgetItem):
         part_log_content = '\n'.join(part_log)
         return part_log_filepath, part_log_content
 
-    def is_selected(self):
-        """
-        Function returns if the chapter is selected or has some code items selected (tri state)
-        :return: Boolean
-        :rtype: bool
-        """
-        if self.checkState(0) in (PART_STATE, CHECKED) and len(self.code_items) > 0:
-            return True
-        else:
-            return False
-
     def selected_items(self):
         """
         Generator for looping over selected code items
         :return: Iterator
         :rtype: CodeItem
         """
-        items = [code_item for code_item in self.code_items if code_item.is_selected()]
-        return items
-
-    def tree_reset(self):
-        """
-        Function for deleting/resetting this chapter
-        :return: nothing
-        """
+        items = list()
         for code_item in self.code_items:
-            code_item.tree_reset()
-
-        self.code_items = list()
-        _ = self.takeChildren()
+            if code_item.is_selected():
+                items.append(code_item)
+        return items

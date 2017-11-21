@@ -29,10 +29,15 @@ PANE_WIDTH = 300
 # # application modes en flags
 
 # colors used
-RED = QBrush(QColor("#ff4444"))
-GREEN = QBrush(QColor("#44ff44"))
-YELLOW = QBrush(QColor("#ffff44"))
-WHITE = QBrush(QColor("#cccccc"))
+red = "#ff4444"
+green = "#44ff44"
+yellow = "#ffff44"
+white = "#cccccc"
+
+RED = QBrush(QColor(red))
+GREEN = QBrush(QColor(green))
+YELLOW = QBrush(QColor(yellow))
+WHITE = QBrush(QColor(white))
 
 # item flags for the all_chapters and selection tree widget items
 ITEM_FLAG_ALL = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
