@@ -17,8 +17,9 @@ Last edited: November 2017
 from vql_manager_core import *
 from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QBrush, QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget
+from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
 from chapter import Chapter
+from difflib import Differ
 
 
 class VqlModel(QTreeWidget):
@@ -52,6 +53,9 @@ class VqlModel(QTreeWidget):
         self._add_chapters(CHAPTER_NAMES)
         self.changed = False
         self.mode = GUI_NONE
+        self.diff_engine = Differ()
+        self.storage_list = list()
+        self.view = VQL_VIEW
 
     def _add_chapters(self, chapter_names):
         """
@@ -81,9 +85,7 @@ class VqlModel(QTreeWidget):
         """
 
         # chapter = self.chapters[chapter_name]
-
         chapter.add_code_item(object_name, code, color, mode)
-
 
     def get_code_as_file(self, selected):
         """
@@ -134,8 +136,13 @@ class VqlModel(QTreeWidget):
             if chapter.name == chapter_name:
                 return chapter
 
-    @staticmethod
-    def compare(chapter, object_name, object_code):
+    def get_diff(self, former_code, next_code):
+        former_code_split = (former_code + '\n').splitlines(True)
+        next_code_split = (next_code + '\n').splitlines(True)
+        diff = list(self.diff_engine.compare(former_code_split, next_code_split))
+        return ''.join(diff)
+
+    def object_compare(self, chapter, object_name, object_code):
         """
         Function returns the color of an compare item, based on the following rules:
         green: the item is new
@@ -144,15 +151,18 @@ class VqlModel(QTreeWidget):
         :param chapter: the chapter of the item
         :param object_name: the name of the Denodo object to be compared
         :param object_code: the code of the Denodo object to be compared
-        :return: the color
-        :rtype: QBrush
+        :return: the color and the diff
+        :rtype: QBrush str
         """
+
         color = GREEN
         for code_item in chapter.code_items:
             if code_item.object_name == object_name:
-                color = YELLOW
                 if code_item.code == object_code:
                     color = WHITE
+                else:
+                    color = YELLOW
+                    code_item.difference = self.get_diff(code_item.code, object_code)
         return color
 
     def switch_mode(self, new_mode):
@@ -182,8 +192,8 @@ class VqlModel(QTreeWidget):
         :param mode: int
         :return: yields the following components: chapter_name, object_name, object_code, is_already_in_model, is_same
         """
-        self.changed = False
 
+        self.changed = False
         indices = [[chapter.name, file_content.find(chapter.header)] for chapter in self.chapters]
         indices.append(['', len(file_content)])
         chapter_parts = [[start[0], file_content[start[1]:end[1]]]  # extract chapter_name and the content code
@@ -197,7 +207,7 @@ class VqlModel(QTreeWidget):
                 object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
 
                 if mode & (COMP_FILE | COMP_REPO):
-                    to_add = [[name, code, self.compare(chapter, name, code)] for name, code in object_code]
+                    to_add = [[name, code, self.object_compare(chapter, name, code)] for name, code in object_code]
                     new_objects = [name for name, code, color in to_add]
                     for item in chapter.code_items:
                         if item.object_name not in new_objects:
@@ -386,3 +396,50 @@ class VqlModel(QTreeWidget):
         for i in range(root_item.childCount()):
             chapter_item = root_item.child(i)
             update_chapter_colors()
+
+    def switch_view(self):
+        temp = self.root.takeChildren()
+        self.root.addChildren(self.storage_list)
+        self.storage_list = temp
+
+    def change_view(self, new_view):
+        if not self.mode & BASE_LOADED:
+            return
+
+        if self.view & new_view:
+            return
+
+        if new_view == VQL_VIEW:
+            if self.storage_list:
+                self.switch_view()
+                self.view = VQL_VIEW
+            else:
+                # build a VQL_View
+                pass
+        elif new_view & DENODO_VIEW:
+            if self.storage_list:
+                self.switch_view()
+                self.view = DENODO_VIEW
+            else:
+                # build denodo view
+                self.build_denodo_view()
+
+    def build_denodo_view(self):
+        folder_chapter = None
+        for chapter in self.chapters:
+            if chapter.name == 'FOLDERS':
+                folder_chapter = chapter
+                break
+
+        if not folder_chapter:
+            return
+
+        for code_item in folder_chapter:
+            code = code_item.code[:-3]
+            start_index = code.find('\'')
+            folder = code[start_index:]
+            print(folder)
+
+
+
+

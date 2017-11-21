@@ -58,6 +58,7 @@ class CodeItem(QTreeWidgetItem):
         self.color = color
         self.mode = mode
         self.setForeground(0, self.color)
+        self.difference = ''
 
     def get_file_path(self, folder):
         """
@@ -67,18 +68,6 @@ class CodeItem(QTreeWidgetItem):
         """
         file_name = path.join(folder, self.object_name.replace(' ', '_') + '.vql')
         return file_name
-
-    def get_code(self, selected):
-        """
-        Function returns code if selected
-        :return: string code content
-        :rtype: str
-        """
-        if selected:
-            if self.is_selected():
-                return self.code
-        else:
-            return self.code
 
     def is_selected(self):
         """
@@ -111,14 +100,6 @@ class CodeItem(QTreeWidgetItem):
         self.color = color
         self.setForeground(0, color)
 
-    # def get_color(self):
-    #     """
-    #     Returns the color of the item
-    #     :return: QBrush
-    #     :rtype: QBrush
-    #     """
-    #     return self.color
-
     @staticmethod
     def make_selected_treeview_item(parent, col, text, user_data, color):
         """
@@ -142,9 +123,20 @@ class CodeItem(QTreeWidgetItem):
         item = QTreeWidgetItem(parent)
         item.setCheckState(col, CHECKED)
         item.setData(col, Qt.CheckStateRole, QVariant())
+        item.setData(col, Qt.UserRole, None)
         item.childIndicatorPolicy = 2
         item.setFlags(ITEM_FLAG_SEL)
         item.setText(col, text)
         item.setData(col, Qt.UserRole, user_data)
         item.setForeground(0, color)
         return item
+
+
+    def extract_folder(self):
+        if not self.code:
+            return ''
+        code = self.code
+        start_index = code.find('FOLDER = \'')
+        end_index = code.find('\'', start_index) - 1
+        folder = code[start_index:end_index]
+        print(folder)

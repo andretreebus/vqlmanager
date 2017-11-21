@@ -26,7 +26,7 @@ from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QTreeWidgetItem
 from code_item import CodeItem
 from vql_manager_core import *
-
+from difflib import Differ
 
 class Chapter(QTreeWidgetItem):
     """
@@ -95,6 +95,10 @@ class Chapter(QTreeWidgetItem):
         _ = self.takeChildren()
 
     def sort(self):
+        """
+        Sorts and filters the selection tree view
+        :return:
+        """
 
         children = self.takeChildren()
         base_children = [child for child in children if child.mode & (BASE_FILE | BASE_REPO)]
@@ -106,7 +110,7 @@ class Chapter(QTreeWidgetItem):
                 index = base_child_object_names.index(comp_child.object_name)
 
             elif comp_child.color == YELLOW:
-                index = base_child_object_names.index(comp_child.object_name) +1
+                index = base_child_object_names.index(comp_child.object_name) + 1
                 base_children.insert(index, comp_child)
                 base_child_object_names.insert(index, comp_child.object_name)
 
@@ -114,7 +118,12 @@ class Chapter(QTreeWidgetItem):
                 base_children.insert(index + 1, comp_child)
                 base_child_object_names.insert(index + 1, comp_child.object_name)
 
-
+        for i, child in enumerate(base_children):
+            if child.color == YELLOW:
+                former_child = base_children[i-1]
+                former_child.setCheckState(0, UNCHECKED)
+            if child.color == RED:
+                child.setCheckState(0, UNCHECKED)
         self.addChildren(base_children)
 
     # import functions

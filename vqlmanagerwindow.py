@@ -76,6 +76,11 @@ class VQLManagerWindow(QMainWindow):
         # Compare with Folder
         self.open_compare_folder_action = QAction(QIcon(self._root + '/images/open_repo.png'),
                                                   'Open &Repository to Compare', self)
+
+        self.denodo_folder_structure_action = QAction(QIcon(self._root + '/images/open_repo.png'),
+                                                  'Denodo Folder Structure', self)
+
+
         # Reset everything
         self.reset_action = QAction(QIcon(self._root + '/images/reset.png'), 'Reset &Everything', self)
 
@@ -237,6 +242,11 @@ class VQLManagerWindow(QMainWindow):
         self.open_compare_folder_action.setStatusTip('Open a repository containing folders with separate vql scripts')
         self.open_compare_folder_action.triggered.connect(lambda: self.on_open(GUI_COMPARE | COMP_REPO))
 
+        self.denodo_folder_structure_action.setShortcut('Ctrl+D')
+        self.denodo_folder_structure_action.setStatusTip('Switch to DENODO View')
+        self.denodo_folder_structure_action.setCheckable(True)
+        self.denodo_folder_structure_action.triggered.connect(self.on_switch_view)
+
         # Reset everything
         # self.reset_action.setShortcut('Ctrl+E')
         self.reset_action.setStatusTip('Reset the application to a clean state')
@@ -257,6 +267,7 @@ class VQLManagerWindow(QMainWindow):
         self.tool_menu = self.menubar.addMenu('&Tools')
         self.tool_menu.addAction(self.open_compare_file_action)
         self.tool_menu.addAction(self.open_compare_folder_action)
+        self.tool_menu.addAction(self.denodo_folder_structure_action)
         self.tool_menu.addSeparator()
         self.tool_menu.addAction(self.reset_action)
 
@@ -450,6 +461,15 @@ class VQLManagerWindow(QMainWindow):
                 file_name = item.data(col, Qt.EditRole)
                 self.command_txtEdit.setText(command)
                 self.command_text_edit_label.setText("Command: " + file_name)
+
+    def on_switch_view(self):
+        if self.denodo_folder_structure_action.isChecked():
+            self.denodo_folder_structure_action.setText('Switch to VQL View')
+            self.all_chapters_treeview.change_view(DENODO_VIEW)
+        else:
+            self.denodo_folder_structure_action.setText('Switch to DENODO View')
+            self.all_chapters_treeview.change_view(VQL_VIEW)
+
 
     # dialogs for opening and saving
 
@@ -951,18 +971,24 @@ class VQLManagerWindow(QMainWindow):
         root = tree.invisibleRootItem()
         make_item = CodeItem.make_selected_treeview_item
         tree.clear()
-
+        current_mode = self.get_mode()
         expanded = [chapter.name for chapter in tree_all.chapters if chapter.isExpanded()]
         chapter_list = [(chapter, make_item(root, col, chapter.name, 'chapter', WHITE))
                         for chapter in tree_all.chapters if chapter.is_selected()]
 
         code_items_to_copy = [(chapter_sel, chapter_all.selected_items()) for chapter_all, chapter_sel in chapter_list]
         for parent, items in code_items_to_copy:
-            _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items]
+            if current_mode & GUI_SELECT:
+                _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items]
+            elif current_mode & GUI_COMPARE:
+                _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items
+                     if (item.color == WHITE and len(item.difference) > 0) or (not item.color == WHITE)]
+
             if parent.text(col) in expanded:
                 parent.setExpanded(True)
 
-        current_mode = self.get_mode()
+
         VqlModel.update_colors(self.all_chapters_treeview, current_mode)
         VqlModel.update_colors(tree, current_mode)
         self.all_chapters_treeview.blockSignals(blocked)
+

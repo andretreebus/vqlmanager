@@ -76,6 +76,11 @@ class SourceType(QObject):
     FILE = 1 << 10
     REPO = 1 << 11
 
+class ViewType:
+    VQL_VIEW = 1 << 12
+    DENODO_VIEW = 1 << 13
+
+
 
 Q_FLAGS(GuiType)
 Q_FLAGS(ModelState)
@@ -94,6 +99,9 @@ COMP_LOADED = ModelState.COMP_LOADED
 
 FILE = SourceType.FILE
 REPO = SourceType.REPO
+
+VQL_VIEW = ViewType.VQL_VIEW
+DENODO_VIEW = ViewType.DENODO_VIEW
 
 
 def show_mode(mode):
@@ -122,3 +130,11 @@ def show_mode(mode):
             mode_txt.append(name)
 
     return ' : '.join(mode_txt)
+
+
+def get_reserved_words():
+    with open('denodo_reserved_words.txt') as f:
+        return [word.strip() for word in f.readlines()]
+
+
+RESERVED_WORDS = get_reserved_words()
