@@ -16,14 +16,15 @@ Last edited: November 2017
 from os import path, makedirs, listdir, unlink, rmdir
 from vql_manager_core import *
 
-from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer
+from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QTreeWidgetItemIterator
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vql_model import VqlModel
-from code_item import CodeItem
+# from code_item import CodeItem
+# from chapter import Chapter
 
 
 class VQLManagerWindow(QMainWindow):
@@ -473,7 +474,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             self.denodo_folder_structure_action.setText('Switch to DENODO View')
             self.all_chapters_treeview.change_view(VQL_VIEW)
-
+        self.update_tree_widgets()
 
     # dialogs for opening and saving
 
@@ -970,29 +971,50 @@ class VQLManagerWindow(QMainWindow):
 
         # convenience pointer names
         col = 0
-        tree = self.selected_treeview
+        tree_sel = self.selected_treeview
+        root_sel = tree_sel.invisibleRootItem()
         tree_all = self.all_chapters_treeview
-        root = tree.invisibleRootItem()
-        make_item = CodeItem.make_selected_treeview_item
-        tree.clear()
-        current_mode = self.get_mode()
-        expanded = [chapter.name for chapter in tree_all.chapters if chapter.isExpanded()]
-        chapter_list = [(chapter, make_item(root, col, chapter.name, 'chapter', WHITE))
-                        for chapter in tree_all.chapters if chapter.is_selected()]
+        root_all = tree_all.invisibleRootItem()
 
-        code_items_to_copy = [(chapter_sel, chapter_all.selected_items()) for chapter_all, chapter_sel in chapter_list]
-        for parent, items in code_items_to_copy:
-            if current_mode & GUI_SELECT:
-                _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items]
-            elif current_mode & GUI_COMPARE:
-                _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items
-                     if (item.color == WHITE and len(item.difference) > 0) or (not item.color == WHITE)]
+        tree_sel.clear()
 
-            if parent.text(col) in expanded:
-                parent.setExpanded(True)
+        root_sel.addChildren(root_all.clone().takeChildren())
+        item_iterator = QTreeWidgetItemIterator(tree_sel)
+        to_be_removed = list()
 
+        while item_iterator.value():
+            item = item_iterator.value()
+            if item.data(0, Qt.UserRole) == 'chapter' and item.childCount() == 0:
+                to_be_removed.append(item)
+            elif item.checkState(0) == UNCHECKED:
+                to_be_removed.append(item)
+            item.setFlags(ITEM_FLAG_SEL)
+            item.setData(col, Qt.CheckStateRole, QVariant())
+            item_iterator += 1
 
-        VqlModel.update_colors(self.all_chapters_treeview, current_mode)
-        VqlModel.update_colors(tree, current_mode)
+        for item in to_be_removed:
+            (item.parent() or root_sel).removeChild(item)
+
+        current_mode = self._mode
+
+        #
+        #
+        # expanded = [chapter.name for chapter in tree_all.chapters if chapter.isExpanded()]
+        # chapter_list = [(chapter, make_item(root, col, chapter.name, 'chapter', WHITE))
+        #                 for chapter in tree_all.chapters if chapter.is_selected()]
+        #
+        # code_items_to_copy = [(chapter_sel, chapter_all.selected_items())
+        # for chapter_all, chapter_sel in chapter_list]
+        # for parent, items in code_items_to_copy:
+        #     if current_mode & GUI_SELECT:
+        #         _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items]
+        #     elif current_mode & GUI_COMPARE:
+        #         _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items
+        #              if (item.color == WHITE and len(item.difference) > 0) or (not item.color == WHITE)]
+        #
+        #     if parent.text(col) in expanded:
+        #         parent.setExpanded(True)
+
+        VqlModel.update_colors(tree_all, current_mode)
+        VqlModel.update_colors(tree_sel, current_mode)
         self.all_chapters_treeview.blockSignals(blocked)
-

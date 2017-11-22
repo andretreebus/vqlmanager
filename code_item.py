@@ -60,6 +60,7 @@ class CodeItem(QTreeWidgetItem):
         self.setForeground(0, self.color)
         self.difference = ''
         self.denodo_folder = ''
+        self.chapter = ''
 
     def get_file_path(self, folder):
         """
@@ -124,7 +125,7 @@ class CodeItem(QTreeWidgetItem):
         item = QTreeWidgetItem(parent)
         item.setCheckState(col, CHECKED)
         item.setData(col, Qt.CheckStateRole, QVariant())
-        item.setData(col, Qt.UserRole, None)
+        # item.setData(col, Qt.UserRole, None)
         item.childIndicatorPolicy = 2
         item.setFlags(ITEM_FLAG_SEL)
         item.setText(col, text)
@@ -132,12 +133,11 @@ class CodeItem(QTreeWidgetItem):
         item.setForeground(0, color)
         return item
 
-
-    def extract_folder(self):
-        if not self.code:
-            return ''
-        code = self.code
-        start_index = code.find('FOLDER = \'')
-        end_index = code.find('\'', start_index) - 1
-        folder = code[start_index:end_index]
-        print(folder)
+    # def extract_folder(self):
+    #     if not self.code:
+    #         return ''
+    #     code = self.code
+    #     start_index = code.find('FOLDER = \'')
+    #     end_index = code.find('\'', start_index) - 1
+    #     folder = code[start_index:end_index]
+    #     print(folder)

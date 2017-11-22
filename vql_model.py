@@ -20,7 +20,7 @@ from PyQt5.QtGui import QBrush, QPixmap
 from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
 from chapter import Chapter
 from difflib import Differ
-from _collections import  OrderedDict
+from _collections import OrderedDict
 
 
 class VqlModel(QTreeWidget):
@@ -70,7 +70,8 @@ class VqlModel(QTreeWidget):
             chapter = Chapter(self.root, chapter_name)
             self.chapters.append(chapter)
 
-    def add_code_part(self, chapter, object_name, code, color, mode):
+    @staticmethod
+    def add_code_part(chapter, object_name, code, color, mode):
         """
         Adds a CodeItem to a chapter
         :param chapter: string chapter name, key in the chapters dictionary
@@ -139,7 +140,6 @@ class VqlModel(QTreeWidget):
             if chapter.name == chapter_name:
                 break
         return chapter
-
 
     def get_diff(self, former_code, next_code):
         former_code_split = (former_code + '\n').splitlines(True)
@@ -486,27 +486,6 @@ class VqlModel(QTreeWidget):
             folder_item = Chapter(parent_item, last_folder)
             old_depth = new_depth
             for code_item in code_items:
-                folder_item.add_code_item(code_item.object_name, code_item.code, code_item.color, code_item.mode)
+                item = folder_item.add_code_item(code_item.object_name, code_item.code, code_item.color, code_item.mode)
+                item.setCheckState(0, code_item.checkState(0))
         self.storage_list = temp_root.takeChildren()
-
-
-    # def add_denodo_folder(self, folder_list):
-    #     root = self.denodo_root
-    #
-    #     current_folder = None
-    #     for folder in folder_list:
-    #          for i in range(root.childCount()):
-    #              child = root.child(i)
-    #              # child = Chapter()
-    #              if child.name == folder:
-    #                  current_folder += '/' + child.name
-
-
-
-
-
-
-
-
-
-

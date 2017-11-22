@@ -26,7 +26,8 @@ from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QTreeWidgetItem
 from code_item import CodeItem
 from vql_manager_core import *
-from difflib import Differ
+# from difflib import Differ
+
 
 class Chapter(QTreeWidgetItem):
     """
@@ -138,12 +139,13 @@ class Chapter(QTreeWidgetItem):
         :type color: QBrush
         :param mode: the color of the item
         :type mode: int
-        :return: nothing
-
+        :return: The new CodeItem
+        :rtype: CodeItem
         """
 
         code_item = CodeItem(self, object_name, code, color, mode)
         self.code_items.append(code_item)
+        return code_item
 
     # export functions
     # to file
