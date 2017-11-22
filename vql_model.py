@@ -20,6 +20,7 @@ from PyQt5.QtGui import QBrush, QPixmap
 from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
 from chapter import Chapter
 from difflib import Differ
+from _collections import  OrderedDict
 
 
 class VqlModel(QTreeWidget):
@@ -56,6 +57,7 @@ class VqlModel(QTreeWidget):
         self.diff_engine = Differ()
         self.storage_list = list()
         self.view = VQL_VIEW
+        self.denodo_root = Chapter(None, 'root')
 
     def _add_chapters(self, chapter_names):
         """
@@ -132,9 +134,12 @@ class VqlModel(QTreeWidget):
         :return: A single chapter
         :rtype: Chapter
         """
+        chapter = None
         for chapter in self.chapters:
             if chapter.name == chapter_name:
-                return chapter
+                break
+        return chapter
+
 
     def get_diff(self, former_code, next_code):
         former_code_split = (former_code + '\n').splitlines(True)
@@ -214,9 +219,11 @@ class VqlModel(QTreeWidget):
                             item.set_color(RED)
                     for name, code, color in to_add:
                         self.add_code_part(chapter, name, code, color, mode)
+                    self.mode = mode | COMP_LOADED | BASE_LOADED
                 elif mode & (BASE_FILE | BASE_REPO):
                     for name, code in object_code:
                         self.add_code_part(chapter, name, code, WHITE, mode)
+                    self.mode = mode | BASE_LOADED
         self.sort(mode)
 
     def tree_reset(self):
@@ -397,11 +404,6 @@ class VqlModel(QTreeWidget):
             chapter_item = root_item.child(i)
             update_chapter_colors()
 
-    def switch_view(self):
-        temp = self.root.takeChildren()
-        self.root.addChildren(self.storage_list)
-        self.storage_list = temp
-
     def change_view(self, new_view):
         if not self.mode & BASE_LOADED:
             return
@@ -423,22 +425,87 @@ class VqlModel(QTreeWidget):
             else:
                 # build denodo view
                 self.build_denodo_view()
+                self.change_view(new_view)
 
-    def build_denodo_view(self):
-        folder_chapter = None
+    def switch_view(self):
+        temp = self.root.takeChildren()
+        self.root.addChildren(self.storage_list)
+        self.storage_list = temp
+
+    def get_folders(self):
+        folders = OrderedDict()
+        for chapter in self.chapters:
+            if chapter.name in ['I18N MAPS', 'DATABASE', 'DATABASE CONFIGURATION', 'TYPES']:
+                continue
+            for code_item in chapter.code_items:
+                code = code_item.code
+                if chapter.name == 'DATASOURCES':
+                    if code.find('DATASOURCE LDAP') > 0:
+                        continue
+                if chapter.name == 'FOLDERS':
+                    start = code.find('\'') + 2
+                    end = len(code) - 5
+                    folder = code[start:end]
+                else:
+                    start = code.find('FOLDER = \'') + 11
+                    end = code.find('\'', start)
+                    folder = code[start:end]
+                if folder:
+                    folder = folder.lower()
+                    code_item.denodo_folder = folder
+                    folders[folder] = list()
         for chapter in self.chapters:
             if chapter.name == 'FOLDERS':
-                folder_chapter = chapter
-                break
+                continue
+            for code_item in chapter.code_items:
+                if code_item.denodo_folder:
+                    folders[code_item.denodo_folder].append(code_item)
+        return folders
 
-        if not folder_chapter:
+    def build_denodo_view(self):
+        folders = self.get_folders()
+        if not folders:
             return
+        print(folders.keys())
 
-        for code_item in folder_chapter:
-            code = code_item.code[:-3]
-            start_index = code.find('\'')
-            folder = code[start_index:]
-            print(folder)
+        temp_widget = VqlModel(None)
+        temp_root = temp_widget.denodo_root
+
+        old_depth = 1
+        parent_item = temp_root
+        folder_item = None
+        for folder, code_items in folders.items():
+            folder_split = folder.split('/')
+            last_folder = folder_split[-1]
+            new_depth = len(folder_split)
+            if new_depth == 1:
+                parent_item = temp_root
+            else:
+                if new_depth > old_depth:
+                    parent_item = folder_item
+            folder_item = Chapter(parent_item, last_folder)
+            old_depth = new_depth
+            for code_item in code_items:
+                folder_item.add_code_item(code_item.object_name, code_item.code, code_item.color, code_item.mode)
+        self.storage_list = temp_root.takeChildren()
+
+
+    # def add_denodo_folder(self, folder_list):
+    #     root = self.denodo_root
+    #
+    #     current_folder = None
+    #     for folder in folder_list:
+    #          for i in range(root.childCount()):
+    #              child = root.child(i)
+    #              # child = Chapter()
+    #              if child.name == folder:
+    #                  current_folder += '/' + child.name
+
+
+
+
+
+
 
 
 

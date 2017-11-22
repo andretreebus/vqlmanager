@@ -59,6 +59,7 @@ class CodeItem(QTreeWidgetItem):
         self.mode = mode
         self.setForeground(0, self.color)
         self.difference = ''
+        self.denodo_folder = ''
 
     def get_file_path(self, folder):
         """

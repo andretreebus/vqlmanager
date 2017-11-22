@@ -302,6 +302,10 @@ class VQLManagerWindow(QMainWindow):
                     self.compare_repository_label.setText('File : ' + self.compare_repository_file)
                 elif new_mode & COMP_REPO:
                     self.compare_repository_label.setText('Repository : ' + self.compare_repository_folder)
+        if new_mode & VQL_VIEW:
+            self.denodo_folder_structure_action.setChecked(False)
+            self.on_switch_view()
+
         self.all_chapters_treeview.switch_mode(new_mode)
         self._mode = new_mode
         self.statusBar.showMessage(show_mode(self._mode))
@@ -431,7 +435,7 @@ class VQLManagerWindow(QMainWindow):
         self.update_tree_widgets()
         self.command_txtEdit.setText('')
         self.command_text_edit_label.setText('Command: ')
-        self.switch_to_mode(GUI_NONE)
+        self.switch_to_mode(GUI_NONE | VQL_VIEW)
 
     def on_selection_changed(self, item, *_):
         """
