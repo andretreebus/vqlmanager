@@ -17,13 +17,13 @@ Last edited: November 2017
 from vql_manager_core import *
 from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QBrush, QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem, QTreeView
+from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
 from chapter import Chapter
 from difflib import Differ
 from _collections import OrderedDict
 
 
-class VqlModel(QTreeView):
+class VqlModel(QTreeWidget):
     """
     VqlModel class represents all objects in a Denodo database
     For example: ddp
@@ -58,6 +58,8 @@ class VqlModel(QTreeView):
         self.storage_list = list()
         self.view = VQL_VIEW
         self.denodo_root = Chapter(None, 'root')
+
+
 
     def _add_chapters(self, chapter_names):
         """
@@ -296,39 +298,39 @@ class VqlModel(QTreeView):
             last_word = line_reversed[0:last_space][::-1]
             return last_word.strip()
 
-        filename = ''
+        object_name = ''
 
         # Object names are on the first line of the code item
         first_line = command[0:command.find("\n")]
 
         if chapter_name == 'I18N MAPS':
-            filename = get_last_word(first_line[0:-2])
+            object_name = get_last_word(first_line[0:-2])
         elif chapter_name == 'DATABASE':
-            pass  # Todo: we don't use export vql files that span multiple databases in Denodo
+            object_name = first_line.split()[4]
         elif chapter_name == 'FOLDERS':
-            filename = first_line[27:-3].replace(' ', '_').replace('/', '_')
+            object_name = first_line[27:-3].replace(' ', '_').replace('/', '_')
         elif chapter_name == 'LISTENERS JMS':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'DATASOURCES':
-            filename = get_last_word(first_line)
+            object_name = get_last_word(first_line)
         elif chapter_name == 'WRAPPERS':
-            filename = get_last_word(first_line)
+            object_name = get_last_word(first_line)
         elif chapter_name == 'STORED PROCEDURES':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'TYPES':
-            filename = first_line.split()[4]
+            object_name = first_line.split()[4]
         elif chapter_name == 'MAPS':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'BASE VIEWS':
-            filename = first_line.split()[4]
+            object_name = first_line.split()[4]
         elif chapter_name == 'VIEWS':
             split = first_line.split(' ')
             if split[3] == 'INTERFACE':
-                filename = split[5]
+                object_name = split[5]
             else:
-                filename = split[4]
+                object_name = split[4]
         elif chapter_name == 'ASSOCIATIONS':
-            filename = first_line.split()[4]
+            object_name = first_line.split()[4]
         elif chapter_name == 'WEBSERVICES':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'WIDGETS':
@@ -337,7 +339,7 @@ class VqlModel(QTreeView):
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'WEBCONTAINER WIDGET DEPLOYMENTS':
             pass  # Todo: we don't use these kind of objects in Denodo
-        return filename
+        return object_name
 
     @staticmethod
     def update_colors(tree, mode):
