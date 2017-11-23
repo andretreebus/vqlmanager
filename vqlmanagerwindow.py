@@ -23,8 +23,8 @@ from PyQt5.QtWidgets import QGridLayout, QSizePolicy
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vql_model import VqlModel
-# from code_item import CodeItem
-# from chapter import Chapter
+from code_item import CodeItem
+from chapter import Chapter
 
 
 class VQLManagerWindow(QMainWindow):
@@ -460,12 +460,13 @@ class VQLManagerWindow(QMainWindow):
         """
         self.command_txtEdit.setText("non selected")
         self.command_text_edit_label.setText("Command:")
-        if isinstance(item, QTreeWidgetItem):
-            if not item.data(col, Qt.UserRole) in ('root', 'chapter'):
-                command = item.data(col, Qt.UserRole)
-                file_name = item.data(col, Qt.EditRole)
-                self.command_txtEdit.setText(command)
-                self.command_text_edit_label.setText("Command: " + file_name)
+        # if isinstance(item, QTreeWidgetItem):
+        if isinstance(item, CodeItem):
+            #if not item.data(col, Qt.UserRole) in ('root', 'chapter'):
+            command = item.data(col, Qt.UserRole)
+            file_name = item.data(col, Qt.EditRole)
+            self.command_txtEdit.setText(command)
+            self.command_text_edit_label.setText("Command: " + file_name)
 
     def on_switch_view(self):
         if self.denodo_folder_structure_action.isChecked():
@@ -952,8 +953,27 @@ class VQLManagerWindow(QMainWindow):
         return True
 
     # Update screen
-
     def update_tree_widgets(self):
+        # stop the update timer
+        self.update_timer.stop()
+        # store former "blocked" indicator
+        blocked = self.all_chapters_treeview.signalsBlocked()
+
+        # block signals while updating
+        self.all_chapters_treeview.blockSignals(True)
+
+        # convenience pointer names
+        col = 0
+        tree_sel = self.selected_treeview
+        # root_sel = tree_sel.invisibleRootItem()
+        tree_all = self.all_chapters_treeview
+        # root_all = tree_all.invisibleRootItem()
+
+        tree_sel.setModel(tree_all.model())
+
+        self.all_chapters_treeview.blockSignals(blocked)
+
+    def update_tree_w_idgets(self):
         """
         Builds/sets new content of the selected_treeview after the selection in the all_chapters_treeview is changed
         This function copies the selected items and leaves out the chapters that are empty
@@ -977,15 +997,23 @@ class VQLManagerWindow(QMainWindow):
         root_all = tree_all.invisibleRootItem()
 
         tree_sel.clear()
-
+        # copy all items including children to selected_treeview
         root_sel.addChildren(root_all.clone().takeChildren())
+
+
+        # itemIterator traverses over every node
         item_iterator = QTreeWidgetItemIterator(tree_sel)
+        # remove unchecked items from selected_treeview
         to_be_removed = list()
 
         while item_iterator.value():
             item = item_iterator.value()
-            if item.data(0, Qt.UserRole) == 'chapter' and item.childCount() == 0:
-                to_be_removed.append(item)
+            if isinstance(item, Chapter):
+            #if item.data(0, Qt.UserRole) == 'chapter':
+                # tree_all.get_chapter_by_name( )
+
+                if item.childCount() == 0:
+                    to_be_removed.append(item)
             elif item.checkState(0) == UNCHECKED:
                 to_be_removed.append(item)
             item.setFlags(ITEM_FLAG_SEL)
@@ -1015,6 +1043,6 @@ class VQLManagerWindow(QMainWindow):
         #     if parent.text(col) in expanded:
         #         parent.setExpanded(True)
 
-        VqlModel.update_colors(tree_all, current_mode)
-        VqlModel.update_colors(tree_sel, current_mode)
+        # VqlModel.update_colors(tree_all, current_mode)
+        # VqlModel.update_colors(tree_sel, current_mode)
         self.all_chapters_treeview.blockSignals(blocked)

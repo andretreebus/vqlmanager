@@ -17,13 +17,13 @@ Last edited: November 2017
 from vql_manager_core import *
 from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QBrush, QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
+from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem, QTreeView
 from chapter import Chapter
 from difflib import Differ
 from _collections import OrderedDict
 
 
-class VqlModel(QTreeWidget):
+class VqlModel(QTreeView):
     """
     VqlModel class represents all objects in a Denodo database
     For example: ddp
@@ -69,6 +69,11 @@ class VqlModel(QTreeWidget):
         for chapter_name in chapter_names:
             chapter = Chapter(self.root, chapter_name)
             self.chapters.append(chapter)
+
+    def get_code_items(self):
+        for chapter in self.chapters:
+            for code_item in chapter.code_items:
+                yield (chapter, code_item)
 
     @staticmethod
     def add_code_part(chapter, object_name, code, color, mode):
@@ -432,41 +437,29 @@ class VqlModel(QTreeWidget):
         self.root.addChildren(self.storage_list)
         self.storage_list = temp
 
-    def get_folders(self):
-        folders = OrderedDict()
-        for chapter in self.chapters:
-            if chapter.name in ['I18N MAPS', 'DATABASE', 'DATABASE CONFIGURATION', 'TYPES']:
-                continue
-            for code_item in chapter.code_items:
-                code = code_item.code
-                if chapter.name == 'DATASOURCES':
-                    if code.find('DATASOURCE LDAP') > 0:
-                        continue
-                if chapter.name == 'FOLDERS':
-                    start = code.find('\'') + 2
-                    end = len(code) - 5
-                    folder = code[start:end]
-                else:
-                    start = code.find('FOLDER = \'') + 11
-                    end = code.find('\'', start)
-                    folder = code[start:end]
-                if folder:
-                    folder = folder.lower()
-                    code_item.denodo_folder = folder
-                    folders[folder] = list()
-        for chapter in self.chapters:
-            if chapter.name == 'FOLDERS':
-                continue
-            for code_item in chapter.code_items:
-                if code_item.denodo_folder:
-                    folders[code_item.denodo_folder].append(code_item)
-        return folders
-
     def build_denodo_view(self):
-        folders = self.get_folders()
+        def extract_folder_names_from_code(_items):
+            _folders = OrderedDict()
+            folder_names = ((code_item, code_item.extract_folder_name(chapter)) for chapter, code_item in _items)
+
+            for code_item, _folder in folder_names:
+                if _folder:
+                    code_item.denodo_folder = _folder
+                    _folders[_folder] = list()
+
+            for chapter, code_item in _items:
+                if not chapter.name == 'FOLDERS':
+                    if code_item.denodo_folder:
+                        _folders[code_item.denodo_folder].append(code_item)
+            return _folders
+
+        items = [(chapter, code_item) for chapter, code_item in self.get_code_items()]
+        folders = extract_folder_names_from_code(items)
+
         if not folders:
             return
-        print(folders.keys())
+
+        # print(folders.keys())
 
         temp_widget = VqlModel(None)
         temp_root = temp_widget.denodo_root

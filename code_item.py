@@ -133,11 +133,23 @@ class CodeItem(QTreeWidgetItem):
         item.setForeground(0, color)
         return item
 
-    # def extract_folder(self):
-    #     if not self.code:
-    #         return ''
-    #     code = self.code
-    #     start_index = code.find('FOLDER = \'')
-    #     end_index = code.find('\'', start_index) - 1
-    #     folder = code[start_index:end_index]
-    #     print(folder)
+    def extract_folder_name(self, chapter):
+        folder_path = ''
+        chapter_name = chapter.name
+        code = self.code
+        if chapter_name == 'DATASOURCES':
+            if code.find('DATASOURCE LDAP') > 0:
+                return folder_path
+        if chapter_name in ['I18N MAPS', 'DATABASE', 'DATABASE CONFIGURATION', 'TYPES']:
+            return folder_path
+        if chapter_name == 'FOLDERS':
+            start = code.find('\'') + 2
+            end = len(code) - 5
+            folder_path = code[start:end]
+        else:
+            start = code.find('FOLDER = \'') + 11
+            end = code.find('\'', start)
+            folder_path = code[start:end]
+        if folder_path:
+            folder_path = folder_path.lower()
+        return folder_path

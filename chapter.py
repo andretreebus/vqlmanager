@@ -55,6 +55,7 @@ class Chapter(QTreeWidgetItem):
         self.setData(0, Qt.UserRole, 'chapter')
         self.header = self.make_header(name)
         self.code_items = list()
+        self.corresponding_item = None
 
     # General functions
     @staticmethod
