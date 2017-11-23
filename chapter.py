@@ -50,9 +50,11 @@ class Chapter(QTreeWidgetItem):
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
         self.setFlags(ITEM_FLAG_ALL)
+
         self.name = name
         self.setText(0, name)
         self.setData(0, Qt.UserRole, 'chapter')
+
         self.header = self.make_header(name)
         self.code_items = list()
         self.corresponding_item = None
@@ -70,6 +72,12 @@ class Chapter(QTreeWidgetItem):
         chapter_header = '# #######################################\n# ' \
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
+
+    def get_code_item_by_object_name(self, object_name):
+        for code_item in self.code_items:
+            if code_item.object_name == object_name:
+                return code_item
+        return None
 
     def is_selected(self):
         """
@@ -144,7 +152,7 @@ class Chapter(QTreeWidgetItem):
         :rtype: CodeItem
         """
 
-        code_item = CodeItem(self, object_name, code, color, mode)
+        code_item = CodeItem(self, object_name, code, color, mode, self.name)
         self.code_items.append(code_item)
         return code_item
 

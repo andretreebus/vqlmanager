@@ -19,7 +19,8 @@ from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QBrush, QPixmap
 from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
 from chapter import Chapter
-from difflib import Differ
+from code_item import CodeItem
+# from difflib import Differ
 from _collections import OrderedDict
 
 
@@ -148,34 +149,30 @@ class VqlModel(QTreeWidget):
                 break
         return chapter
 
-    def get_diff(self, former_code, next_code):
-        former_code_split = (former_code + '\n').splitlines(True)
-        next_code_split = (next_code + '\n').splitlines(True)
-        diff = list(self.diff_engine.compare(former_code_split, next_code_split))
-        return ''.join(diff)
 
-    def object_compare(self, chapter, object_name, object_code):
-        """
-        Function returns the color of an compare item, based on the following rules:
-        green: the item is new
-        yellow: the item is changed
-        white: the item is the same
-        :param chapter: the chapter of the item
-        :param object_name: the name of the Denodo object to be compared
-        :param object_code: the code of the Denodo object to be compared
-        :return: the color and the diff
-        :rtype: QBrush str
-        """
 
-        color = GREEN
-        for code_item in chapter.code_items:
-            if code_item.object_name == object_name:
-                if code_item.code == object_code:
-                    color = WHITE
-                else:
-                    color = YELLOW
-                    code_item.difference = self.get_diff(code_item.code, object_code)
-        return color
+    # def object_compare(self, chapter, object_name, object_code):
+    #     """
+    #     Function returns the color of an compare item, based on the following rules:
+    #     green: the item is new
+    #     yellow: the item is changed
+    #     white: the item is the same
+    #     :param chapter: the chapter of the item
+    #     :param object_name: the name of the Denodo object to be compared
+    #     :param object_code: the code of the Denodo object to be compared
+    #     :return: the color and the diff
+    #     :rtype: QBrush str
+    #     """
+    #
+    #     color = GREEN
+    #     for code_item in chapter.code_items:
+    #         if code_item.object_name == object_name:
+    #             if code_item.code == object_code:
+    #                 color = WHITE
+    #             else:
+    #                 color = YELLOW
+    #                 code_item.difference = self.get_diff(code_item.code, object_code)
+    #     return color
 
     def switch_mode(self, new_mode):
         if new_mode & GUI_NONE:
@@ -216,22 +213,22 @@ class VqlModel(QTreeWidget):
             chapter = self.get_chapter_by_name(chapter_name)
             if chapter:
                 object_codes = (DELIMITER + code for code in chapter_part.split(DELIMITER)[1:])
-                object_code = [(self.extract_object_name(chapter_name, code), code) for code in object_codes]
 
+                if mode & (BASE_FILE | BASE_REPO):
+                    chapter.code_items = [CodeItem(chapter, chapter.name, code=code) for code in object_codes]
                 if mode & (COMP_FILE | COMP_REPO):
-                    to_add = [[name, code, self.object_compare(chapter, name, code)] for name, code in object_code]
-                    new_objects = [name for name, code, color in to_add]
-                    for item in chapter.code_items:
-                        if item.object_name not in new_objects:
-                            item.set_color(RED)
-                    for name, code, color in to_add:
-                        self.add_code_part(chapter, name, code, color, mode)
-                    self.mode = mode | COMP_LOADED | BASE_LOADED
-                elif mode & (BASE_FILE | BASE_REPO):
-                    for name, code in object_code:
-                        self.add_code_part(chapter, name, code, WHITE, mode)
-                    self.mode = mode | BASE_LOADED
-        self.sort(mode)
+                    new_objects = ((CodeItem.extract_object_name_from_code(chapter.name, code), code)
+                                   for code in object_codes)
+                    for new_object_name, code in new_objects:
+                        code_item = chapter.get_code_item_by_object_name(new_object_name)
+                        if code_item:
+                            code_item.set_compare_code(code)
+                        else:
+                            code_items = (CodeItem(chapter, chapter.name, compare_code=code) for code in object_codes)
+                            for code_item in code_items:
+                                chapter.code_items.append(code_item)
+
+        #self.sort(mode) Todo this
 
     def tree_reset(self):
         """
@@ -268,80 +265,6 @@ class VqlModel(QTreeWidget):
         pass
 
     @staticmethod
-    def extract_object_name(chapter_name, command):
-        """
-        Helper function for the 'parse' function
-        The function searches for the Denodo object name to construct a unique file name in the repository
-        Each chapter has its own way of extracting the object name
-
-        Warning!!
-        With newer versions of Denodo it should be checked if the structure they use is the same
-
-        :param command: string with code relating to one object in Denodo
-        :type command: str
-        :param chapter_name: string with the name of the chapter it belongs to
-        :type chapter_name: str
-        :return: string with the filename
-        :rtype: str
-        """
-
-        def get_last_word(line):
-            """
-            Helper function for the extract_filename function
-            :param line: string, one line of code (the first line)
-            :type line: str
-            :return: string with the last word on the line
-            :rtype: str
-            """
-            line_reversed = line.strip()[::-1]
-            last_space = line_reversed.find(' ')
-            last_word = line_reversed[0:last_space][::-1]
-            return last_word.strip()
-
-        object_name = ''
-
-        # Object names are on the first line of the code item
-        first_line = command[0:command.find("\n")]
-
-        if chapter_name == 'I18N MAPS':
-            object_name = get_last_word(first_line[0:-2])
-        elif chapter_name == 'DATABASE':
-            object_name = first_line.split()[4]
-        elif chapter_name == 'FOLDERS':
-            object_name = first_line[27:-3].replace(' ', '_').replace('/', '_')
-        elif chapter_name == 'LISTENERS JMS':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        elif chapter_name == 'DATASOURCES':
-            object_name = get_last_word(first_line)
-        elif chapter_name == 'WRAPPERS':
-            object_name = get_last_word(first_line)
-        elif chapter_name == 'STORED PROCEDURES':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        elif chapter_name == 'TYPES':
-            object_name = first_line.split()[4]
-        elif chapter_name == 'MAPS':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        elif chapter_name == 'BASE VIEWS':
-            object_name = first_line.split()[4]
-        elif chapter_name == 'VIEWS':
-            split = first_line.split(' ')
-            if split[3] == 'INTERFACE':
-                object_name = split[5]
-            else:
-                object_name = split[4]
-        elif chapter_name == 'ASSOCIATIONS':
-            object_name = first_line.split()[4]
-        elif chapter_name == 'WEBSERVICES':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        elif chapter_name == 'WIDGETS':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        elif chapter_name == 'WEBCONTAINER WEB SERVICE DEPLOYMENTS':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        elif chapter_name == 'WEBCONTAINER WIDGET DEPLOYMENTS':
-            pass  # Todo: we don't use these kind of objects in Denodo
-        return object_name
-
-    @staticmethod
     def update_colors(tree, mode):
         """
         Update the colors of the two tree objects
@@ -359,37 +282,6 @@ class VqlModel(QTreeWidget):
             :return: nothing
             """
 
-            def translate_colors(item_color, to_text=True):
-                """
-                Function for translating item QBrush objects for strings
-                This is needed because the set function does not accept unhashable items
-                :param item_color: the object to be translated
-                :type item_color: str or QBrush
-                :param to_text: indicator for the direction of the tranlation
-                :type to_text: bool
-                :return: Translated value
-                :rtype: QBrush or str
-                """
-                color = None
-                if to_text:
-                    if item_color == RED:
-                        color = 'red'
-                    elif item_color == GREEN:
-                        color = 'green'
-                    elif item_color == YELLOW:
-                        color = 'yellow'
-                    elif item_color == WHITE:
-                        color = 'white'
-                else:
-                    if item_color == 'red':
-                        color = RED
-                    elif item_color == 'green':
-                        color = GREEN
-                    elif item_color == 'yellow':
-                        color = YELLOW
-                    elif item_color == 'white':
-                        color = WHITE
-                return color
             children = (chapter_item.child(j) for j in range(chapter_item.childCount()))
             child_colors = (translate_colors(child.data(0, Qt.ForegroundRole), to_text=True) for child in children)
             unique_colors_in_chapter = {color for color in child_colors}
@@ -442,7 +334,7 @@ class VqlModel(QTreeWidget):
     def build_denodo_view(self):
         def extract_folder_names_from_code(_items):
             _folders = OrderedDict()
-            folder_names = ((code_item, code_item.extract_folder_name(chapter)) for chapter, code_item in _items)
+            folder_names = ((code_item, code_item.extract_denodo_folder_name_from_code(chapter)) for chapter, code_item in _items)
 
             for code_item, _folder in folder_names:
                 if _folder:

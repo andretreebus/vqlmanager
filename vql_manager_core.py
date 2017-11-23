@@ -104,6 +104,39 @@ VQL_VIEW = ViewType.VQL_VIEW
 DENODO_VIEW = ViewType.DENODO_VIEW
 
 
+def translate_colors(item_color, to_text=True):
+    """
+    Function for translating item QBrush objects for strings
+    This is needed because the set function does not accept unhashable items
+    :param item_color: the object to be translated
+    :type item_color: str or QBrush
+    :param to_text: indicator for the direction of the tranlation
+    :type to_text: bool
+    :return: Translated value
+    :rtype: QBrush or str
+    """
+    color = None
+    if to_text:
+        if item_color == RED:
+            color = 'red'
+        elif item_color == GREEN:
+            color = 'green'
+        elif item_color == YELLOW:
+            color = 'yellow'
+        elif item_color == WHITE:
+            color = 'white'
+    else:
+        if item_color == 'red':
+            color = RED
+        elif item_color == 'green':
+            color = GREEN
+        elif item_color == 'yellow':
+            color = YELLOW
+        elif item_color == 'white':
+            color = WHITE
+    return color
+
+
 def show_mode(mode):
     """
 

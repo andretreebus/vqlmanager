@@ -447,7 +447,6 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.changed = True
         self.update_timer.start(100)
 
-
     def on_click_item_selected(self, item, col):
         """
         Event handler for looking up code in the code pane
@@ -998,7 +997,6 @@ class VQLManagerWindow(QMainWindow):
         # clone() only takes QWidgetItem data no inherited members!!
         # cloned items are of type QTreeWidgetItem!
         root_sel.addChildren(root_all.clone().takeChildren())
-
 
         # itemIterator traverses over every node
         item_iterator = QTreeWidgetItemIterator(tree_sel)
