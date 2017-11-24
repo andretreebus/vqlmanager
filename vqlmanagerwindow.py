@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import QGridLayout, QSizePolicy
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vql_model import VqlModel
+from code_item import CodeItem
 
 
 class VQLManagerWindow(QMainWindow):
@@ -56,7 +57,7 @@ class VQLManagerWindow(QMainWindow):
         self.compare_repository_label = QLabel(self.mainwidget)
 
         self.selection_viewer_label = QLabel(self.mainwidget)
-        self.command_txtEdit = QTextEdit(self.mainwidget)
+        self.code_txtEdit = QTextEdit(self.mainwidget)
         self.statusBar = QStatusBar(self)
 
         #  Actions and Menubar ###############################################################################
@@ -77,8 +78,7 @@ class VQLManagerWindow(QMainWindow):
                                                   'Open &Repository to Compare', self)
 
         self.denodo_folder_structure_action = QAction(QIcon(self._root + '/images/open_repo.png'),
-                                                  'Denodo Folder Structure', self)
-
+                                                      'Denodo Folder Structure', self)
 
         # Reset everything
         self.reset_action = QAction(QIcon(self._root + '/images/reset.png'), 'Reset &Everything', self)
@@ -167,13 +167,13 @@ class VQLManagerWindow(QMainWindow):
         set_size(self.compare_repository_label)
         set_size(self.base_repository_label)
 
-        self.command_txtEdit.setAcceptRichText(False)
-        self.command_txtEdit.setLineWrapMode(0)
-        self.command_txtEdit.setReadOnly(True)
-        self.command_txtEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.command_txtEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.command_txtEdit.setText("non selected")
-        set_size(self.command_txtEdit)
+        self.code_txtEdit.setAcceptRichText(False)
+        self.code_txtEdit.setLineWrapMode(0)
+        self.code_txtEdit.setReadOnly(True)
+        self.code_txtEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.code_txtEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.code_txtEdit.setText("non selected")
+        set_size(self.code_txtEdit)
 
         #  Layout ################################################################################
         # left pane
@@ -187,7 +187,7 @@ class VQLManagerWindow(QMainWindow):
         self.layout.addWidget(self.selection_viewer_label,  0, 1, 3, 1)
         self.layout.addWidget(self.selected_treeview,       3, 1)
         self.layout.addWidget(self.command_text_edit_label, 4, 1)
-        self.layout.addWidget(self.command_txtEdit,         5, 1)
+        self.layout.addWidget(self.code_txtEdit, 5, 1)
 
         self.layout.setRowStretch(0, 1)
         self.layout.setRowStretch(1, 1)
@@ -432,7 +432,7 @@ class VQLManagerWindow(QMainWindow):
         elif reset_mode & GUI_COMPARE:
             self.all_chapters_treeview.tree_reset_compare()
         self.update_tree_widgets()
-        self.command_txtEdit.setText('')
+        self.code_txtEdit.setText('')
         self.command_text_edit_label.setText('Command: ')
         self.switch_to_mode(GUI_NONE | VQL_VIEW)
 
@@ -456,13 +456,11 @@ class VQLManagerWindow(QMainWindow):
         :type col: int
         :return: Nothing
         """
-        self.command_txtEdit.setText("non selected")
-        self.command_text_edit_label.setText("Command:")
-        if not item.data(col, Qt.UserRole) in ('root', 'chapter'):
-            command = item.data(col, Qt.UserRole)
-            file_name = item.data(col, Qt.EditRole)
-            self.command_txtEdit.setText(command)
-            self.command_text_edit_label.setText("Command: " + file_name)
+        self.code_txtEdit.setText("non selected")
+        self.command_text_edit_label.setText("Denodo Code:")
+        if item.data(col, Qt.UserRole)['class_type'] == CodeItem:
+            self.code_txtEdit.setText(item.data(col, Qt.UserRole)['code'])
+            self.command_text_edit_label.setText("Denodo Code: " + item.data(col, Qt.UserRole)['object_name'])
 
     def on_switch_view(self):
         if self.denodo_folder_structure_action.isChecked():
@@ -948,27 +946,6 @@ class VQLManagerWindow(QMainWindow):
         self.statusBar.showMessage("Ready")
         return True
 
-    # Update screen
-    def update_tree_w_idgets(self):
-        # stop the update timer
-        self.update_timer.stop()
-        # store former "blocked" indicator
-        blocked = self.all_chapters_treeview.signalsBlocked()
-
-        # block signals while updating
-        self.all_chapters_treeview.blockSignals(True)
-
-        # convenience pointer names
-        col = 0
-        tree_sel = self.selected_treeview
-        # root_sel = tree_sel.invisibleRootItem()
-        tree_all = self.all_chapters_treeview
-        # root_all = tree_all.invisibleRootItem()
-
-        # tree_sel.setModel(tree_all.model())
-
-        self.all_chapters_treeview.blockSignals(blocked)
-
     def update_tree_widgets(self):
         """
         Builds/sets new content of the selected_treeview after the selection in the all_chapters_treeview is changed
@@ -991,52 +968,16 @@ class VQLManagerWindow(QMainWindow):
         root_sel = tree_sel.invisibleRootItem()
         tree_all = self.all_chapters_treeview
         root_all = tree_all.invisibleRootItem()
-
         tree_sel.clear()
-        # copy all items including children to selected_treeview
-        # clone() only takes QWidgetItem data no inherited members!!
-        # cloned items are of type QTreeWidgetItem!
+        tree_all.pack()
         root_sel.addChildren(root_all.clone().takeChildren())
+        VqlModel.unpack(tree_sel)
 
-        # itemIterator traverses over every node
+        # # itemIterator traverses over every node
         item_iterator = QTreeWidgetItemIterator(tree_sel)
-        # remove unchecked items from selected_treeview
-        to_be_removed = list()
-
         while item_iterator.value():
             item = item_iterator.value()
-            if item.data(0, Qt.UserRole) == 'chapter':
-                if item.childCount() == 0:
-                    to_be_removed.append(item)
-            elif item.checkState(0) == UNCHECKED:
-                to_be_removed.append(item)
             item.setFlags(ITEM_FLAG_SEL)
             item.setData(col, Qt.CheckStateRole, QVariant())
             item_iterator += 1
-
-        for item in to_be_removed:
-            (item.parent() or root_sel).removeChild(item)
-
-        current_mode = self._mode
-
-        #
-        #
-        # expanded = [chapter.name for chapter in tree_all.chapters if chapter.isExpanded()]
-        # chapter_list = [(chapter, make_item(root, col, chapter.name, 'chapter', WHITE))
-        #                 for chapter in tree_all.chapters if chapter.is_selected()]
-        #
-        # code_items_to_copy = [(chapter_sel, chapter_all.selected_items())
-        # for chapter_all, chapter_sel in chapter_list]
-        # for parent, items in code_items_to_copy:
-        #     if current_mode & GUI_SELECT:
-        #         _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items]
-        #     elif current_mode & GUI_COMPARE:
-        #         _ = [make_item(parent, col, item.object_name, item.code, item.color) for item in items
-        #              if (item.color == WHITE and len(item.difference) > 0) or (not item.color == WHITE)]
-        #
-        #     if parent.text(col) in expanded:
-        #         parent.setExpanded(True)
-
-        VqlModel.update_colors(tree_all, current_mode)
-        VqlModel.update_colors(tree_sel, current_mode)
         self.all_chapters_treeview.blockSignals(blocked)

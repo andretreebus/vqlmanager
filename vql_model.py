@@ -16,11 +16,10 @@ Last edited: November 2017
 
 from vql_manager_core import *
 from PyQt5.QtCore import Qt, QBuffer, QIODevice
-from PyQt5.QtGui import QBrush, QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QWidget, QTreeWidget
 from chapter import Chapter
 from code_item import CodeItem
-# from difflib import Differ
 from _collections import OrderedDict
 
 
@@ -55,12 +54,26 @@ class VqlModel(QTreeWidget):
         self._add_chapters(CHAPTER_NAMES)
         self.changed = False
         self.mode = GUI_NONE
-        self.diff_engine = Differ()
         self.storage_list = list()
         self.view = VQL_VIEW
         self.denodo_root = Chapter(None, 'root')
 
+    def pack(self):
+        for chapter in self.chapters:
+            chapter.pack()
 
+    @staticmethod
+    def unpack(tree):
+        deletes = list()
+        for i in range(tree.topLevelItemCount()):
+            child = tree.topLevelItem(i)
+            if (child.childCount() == 0) or (child.checkState(0) == UNCHECKED):
+                deletes.append(child)
+            else:
+                item_class = child.data(0, Qt.UserRole)['class_type']
+                item_class.unpack(child)
+        for child in deletes:
+            tree.takeTopLevelItem(tree.indexOfTopLevelItem(child))
 
     def _add_chapters(self, chapter_names):
         """
@@ -77,26 +90,6 @@ class VqlModel(QTreeWidget):
         for chapter in self.chapters:
             for code_item in chapter.code_items:
                 yield (chapter, code_item)
-
-    @staticmethod
-    def add_code_part(chapter, object_name, code, color, mode):
-        """
-        Adds a CodeItem to a chapter
-        :param chapter: string chapter name, key in the chapters dictionary
-        :type chapter: Chapter
-        :param object_name: string file_name of the bit of code in the repository
-        :type object_name: str
-        :param code: string actual Denodo code for one Denodo object
-        :type code: str
-        :param color: the color of the item
-        :type color: QBrush
-        :param mode: the context type of code part, subset of modes
-        :type mode: int
-        :return: nothing
-        """
-
-        # chapter = self.chapters[chapter_name]
-        chapter.add_code_item(object_name, code, color, mode)
 
     def get_code_as_file(self, selected):
         """
@@ -149,31 +142,6 @@ class VqlModel(QTreeWidget):
                 break
         return chapter
 
-
-
-    # def object_compare(self, chapter, object_name, object_code):
-    #     """
-    #     Function returns the color of an compare item, based on the following rules:
-    #     green: the item is new
-    #     yellow: the item is changed
-    #     white: the item is the same
-    #     :param chapter: the chapter of the item
-    #     :param object_name: the name of the Denodo object to be compared
-    #     :param object_code: the code of the Denodo object to be compared
-    #     :return: the color and the diff
-    #     :rtype: QBrush str
-    #     """
-    #
-    #     color = GREEN
-    #     for code_item in chapter.code_items:
-    #         if code_item.object_name == object_name:
-    #             if code_item.code == object_code:
-    #                 color = WHITE
-    #             else:
-    #                 color = YELLOW
-    #                 code_item.difference = self.get_diff(code_item.code, object_code)
-    #     return color
-
     def switch_mode(self, new_mode):
         if new_mode & GUI_NONE:
             self.setHeaderLabel('')
@@ -215,20 +183,27 @@ class VqlModel(QTreeWidget):
                 object_codes = (DELIMITER + code for code in chapter_part.split(DELIMITER)[1:])
 
                 if mode & (BASE_FILE | BASE_REPO):
-                    chapter.code_items = [CodeItem(chapter, chapter.name, code=code) for code in object_codes]
+                    chapter.code_items = [CodeItem(chapter, chapter.name, mode, code=code)
+                                          for code in object_codes]
+
                 if mode & (COMP_FILE | COMP_REPO):
                     new_objects = ((CodeItem.extract_object_name_from_code(chapter.name, code), code)
                                    for code in object_codes)
+                    index = 0
                     for new_object_name, code in new_objects:
-                        code_item = chapter.get_code_item_by_object_name(new_object_name)
+                        i, code_item = chapter.get_code_item_by_object_name(new_object_name)
                         if code_item:
-                            code_item.set_compare_code(code)
+                            code_item.set_compare_code(code, mode)
+                            index = i
                         else:
-                            code_items = (CodeItem(chapter, chapter.name, compare_code=code) for code in object_codes)
-                            for code_item in code_items:
-                                chapter.code_items.append(code_item)
-
-        #self.sort(mode) Todo this
+                            index += 1
+                            code_item = CodeItem(chapter, chapter.name, mode, compare_code=code)
+                            chapter.code_items.insert(index, code_item)
+            if mode & (BASE_FILE | BASE_REPO):
+                chapter.set_color_based_on_children(GUI_SELECT)
+            elif mode & (COMP_FILE | COMP_REPO):
+                chapter.set_color_based_on_children(GUI_COMPARE)
+            chapter.pack()
 
     def tree_reset(self):
         """
@@ -252,56 +227,13 @@ class VqlModel(QTreeWidget):
 
         # self.setHeaderLabel('Selection')
 
-    def sort(self, mode):
-        if mode & (COMP_FILE | COMP_REPO):
-            for chapter in self.chapters:
-                chapter.sort()
-
     def tree_reset_compare(self):
         """
         Reset of compare tree items
         :return:
         """
-        pass
-
-    @staticmethod
-    def update_colors(tree, mode):
-        """
-        Update the colors of the two tree objects
-        :param tree: Reference to the QTreeWidget
-        :type tree: QTreeWidget
-        :param mode: Reference to the current mode
-        :type mode: int
-        :return: nothing
-        """
-
-        def update_chapter_colors():
-            """
-            Helper function for the update_colors function
-            this function figures out the colors of the chapter items and sets them
-            :return: nothing
-            """
-
-            children = (chapter_item.child(j) for j in range(chapter_item.childCount()))
-            child_colors = (translate_colors(child.data(0, Qt.ForegroundRole), to_text=True) for child in children)
-            unique_colors_in_chapter = {color for color in child_colors}
-
-            length = len(unique_colors_in_chapter)
-            if length == 0:  # no items found, so these are items not found in the new items
-                if mode & COMP_LOADED:
-                    chapter_color = RED
-                else:
-                    chapter_color = WHITE
-            elif length == 1:  # all items the same color , use that color
-                chapter_color = translate_colors(list(unique_colors_in_chapter)[0], to_text=False)
-            else:
-                chapter_color = YELLOW
-            chapter_item.setForeground(0, chapter_color)
-
-        root_item = tree.invisibleRootItem()
-        for i in range(root_item.childCount()):
-            chapter_item = root_item.child(i)
-            update_chapter_colors()
+        for chapter in self.chapters:
+            chapter.set_gui(GUI_SELECT)
 
     def change_view(self, new_view):
         if not self.mode & BASE_LOADED:
@@ -332,20 +264,21 @@ class VqlModel(QTreeWidget):
         self.storage_list = temp
 
     def build_denodo_view(self):
-        def extract_folder_names_from_code(_items):
-            _folders = OrderedDict()
-            folder_names = ((code_item, code_item.extract_denodo_folder_name_from_code(chapter)) for chapter, code_item in _items)
-
-            for code_item, _folder in folder_names:
-                if _folder:
-                    code_item.denodo_folder = _folder
-                    _folders[_folder] = list()
-
-            for chapter, code_item in _items:
-                if not chapter.name == 'FOLDERS':
-                    if code_item.denodo_folder:
-                        _folders[code_item.denodo_folder].append(code_item)
-            return _folders
+        # def extract_folder_names_from_code(_items):
+        #     _folders = OrderedDict()
+        #     folder_names = ((code_item, code_item.extract_denodo_folder_name_from_code(chapter))
+        #                     for chapter, code_item in _items)
+        #
+        #     for code_item, _folder in folder_names:
+        #         if _folder:
+        #             code_item.denodo_folder = _folder
+        #             _folders[_folder] = list()
+        #
+        #     for chapter, code_item in _items:
+        #         if not chapter.name == 'FOLDERS':
+        #             if code_item.denodo_folder:
+        #                 _folders[code_item.denodo_folder].append(code_item)
+        #     return _folders
 
         items = [(chapter, code_item) for chapter, code_item in self.get_code_items()]
         folders = extract_folder_names_from_code(items)

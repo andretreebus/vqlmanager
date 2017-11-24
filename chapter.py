@@ -21,12 +21,10 @@ Last edited: November 2017
 """
 
 from os import path
-# from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QTreeWidgetItem
 from code_item import CodeItem
 from vql_manager_core import *
-# from difflib import Differ
 
 
 class Chapter(QTreeWidgetItem):
@@ -47,19 +45,76 @@ class Chapter(QTreeWidgetItem):
         :type name: str
         """
         super(Chapter, self).__init__(parent)
+        self.user_data = dict()
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
         self.setFlags(ITEM_FLAG_ALL)
-
+        self.class_type = Chapter
         self.name = name
         self.setText(0, name)
-        self.setData(0, Qt.UserRole, 'chapter')
-
         self.header = self.make_header(name)
         self.code_items = list()
-        self.corresponding_item = None
+        self.chapter_items = list()
+        self.parent_chapter_name = ''
+        self.color = WHITE
+        self.gui = GUI_SELECT
+        self.selected_child_count = 0
+        self.pack()
 
     # General functions
+
+    def pack(self):
+        self.user_data['name'] = self.name
+        self.user_data['header'] = self.header
+        self.user_data['code_items'] = self.code_items
+        self.user_data['chapter_items'] = self.chapter_items
+        self.user_data['parent_chapter_name'] = self.parent_chapter_name
+        self.user_data['color'] = self.color
+        self.user_data['check_state'] = self.checkState(0)
+        self.user_data['gui'] = self.gui
+        self.user_data['class_type'] = self.class_type
+        self.setData(0, Qt.UserRole, self.user_data)
+        self.selected_child_count = 0
+        for code_item in self.code_items:
+            code_item.chapter_name = self.name
+            if code_item.is_selected():
+                self.selected_child_count += 1
+            code_item.pack()
+        for chapter in self.chapter_items:
+            chapter.parent_chapter_name = self.name
+            if chapter.is_selected():
+                self.selected_child_count += 1
+            chapter.pack()
+        self.user_data['selected_child_count'] = self.selected_child_count
+
+    @staticmethod
+    def unpack(item):
+        item.user_data = item.data(0, Qt.UserRole)
+        item.name = item.user_data['name']
+        item.header = item.user_data['header']
+        item.code_items = item.user_data['code_items']
+        item.color = item.user_data['color']
+        item.chapter_items = item.user_data['chapter_items']
+        item.gui = item.user_data['gui']
+        item.class_type = item.user_data['class_type']
+        item.selected_child_count = item.user_data['selected_child_count']
+        item = QTreeWidgetItem()
+
+        deletes = list()
+        for i in range(item.childCount()):
+            child = item.child(i)
+            class_type = child.data(0, Qt.UserRole)['class_type']
+            if class_type == Chapter:
+                if (child.childCount() == 0) or (child.checkState == UNCHECKED):
+                    deletes.append(child)
+            elif class_type == CodeItem:
+                if child.checkState == UNCHECKED:
+                    deletes.append(child)
+            else:
+                class_type.unpack(child)
+        for child in deletes:
+            item.takeChild(item.indexOfChild(child))
+
     @staticmethod
     def make_header(chapter_name):
         """
@@ -73,11 +128,54 @@ class Chapter(QTreeWidgetItem):
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
 
-    def get_code_item_by_object_name(self, object_name):
+    def remove_code_item(self, object_name):
+        _, code_item = self.get_code_item_by_object_name(object_name)
+        index = self.indexOfChild(code_item)
+        self.code_items.remove(code_item)
+        child = self.takeChild(index)
+        del child
+
+    def set_gui(self, gui):
+        self.gui = gui
+        for chapter in self.chapter_items:
+            chapter.set_gui(gui)
         for code_item in self.code_items:
+            code_item.set_gui(gui)
+
+    def set_color_based_on_children(self, mode, color=None):
+        if color:
+            self.set_color(color)
+            return
+
+        colors = [translate_colors(code_item.color, to_text=True) for code_item in self.code_items]
+        colors.extend([translate_colors(chapter_item.color, to_text=True) for chapter_item in self.chapter_items])
+        unique_colors = list(set(colors))
+        length = len(unique_colors)
+        if length == 0:
+            if mode & GUI_SELECT:
+                self.set_color(WHITE)
+            else:
+                self.set_color(RED)
+        elif length == 1:
+            self.set_color(translate_colors(unique_colors[0], to_text=False))
+        else:
+            self.set_color(YELLOW)
+
+    def set_color(self, color):
+        """
+        Set the color
+        :param color:
+        :type color: QBrush
+        :return:
+        """
+        self.color = color
+        self.setForeground(0, color)
+
+    def get_code_item_by_object_name(self, object_name):
+        for index, code_item in enumerate(self.code_items):
             if code_item.object_name == object_name:
-                return code_item
-        return None
+                return index, code_item
+        return None, None
 
     def is_selected(self):
         """
@@ -103,58 +201,6 @@ class Chapter(QTreeWidgetItem):
 
         self.code_items = list()
         _ = self.takeChildren()
-
-    def sort(self):
-        """
-        Sorts and filters the selection tree view
-        :return:
-        """
-
-        children = self.takeChildren()
-        base_children = [child for child in children if child.mode & (BASE_FILE | BASE_REPO)]
-        base_child_object_names = [child.object_name for child in children if child.mode & (BASE_FILE | BASE_REPO)]
-        comp_children = [child for child in children if child.mode & (COMP_FILE | COMP_REPO)]
-        index = 0
-        for comp_child in comp_children:
-            if comp_child.color == WHITE:
-                index = base_child_object_names.index(comp_child.object_name)
-
-            elif comp_child.color == YELLOW:
-                index = base_child_object_names.index(comp_child.object_name) + 1
-                base_children.insert(index, comp_child)
-                base_child_object_names.insert(index, comp_child.object_name)
-
-            if comp_child.color == GREEN:
-                base_children.insert(index + 1, comp_child)
-                base_child_object_names.insert(index + 1, comp_child.object_name)
-
-        for i, child in enumerate(base_children):
-            if child.color == YELLOW:
-                former_child = base_children[i-1]
-                former_child.setCheckState(0, UNCHECKED)
-            if child.color == RED:
-                child.setCheckState(0, UNCHECKED)
-        self.addChildren(base_children)
-
-    # import functions
-    def add_code_item(self, object_name, code, color, mode):
-        """
-        Function to construct and store a CodeItem in this Chapter
-        :param object_name: string of the code item's file name
-        :type object_name: str
-        :param code: string with code content of the code item
-        :type code: str
-        :param color: the color of the item
-        :type color: QBrush
-        :param mode: the color of the item
-        :type mode: int
-        :return: The new CodeItem
-        :rtype: CodeItem
-        """
-
-        code_item = CodeItem(self, object_name, code, color, mode, self.name)
-        self.code_items.append(code_item)
-        return code_item
 
     # export functions
     # to file

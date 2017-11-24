@@ -25,7 +25,6 @@ from vql_manager_core import *
 from os import path
 from difflib import Differ
 
-# from PyQt5.QtCore import QVariant
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
 
@@ -39,7 +38,7 @@ class CodeItem(QTreeWidgetItem):
 
     diff_engine = Differ()
 
-    def __init__(self, parent, chapter_name, code=None, compare_code=None):
+    def __init__(self, parent, chapter_name, mode, code=None, compare_code=None):
         """
         CodeItem Class
         :param parent:
@@ -52,31 +51,33 @@ class CodeItem(QTreeWidgetItem):
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
         self.setFlags(ITEM_FLAG_ALL)
-
+        self.class_type = CodeItem
         self.chapter_name = chapter_name
-        # self.mode = mode
+        self.mode = mode
         self.code = code
         self.compare_code = ''
         self.object_name = ''
         self.denodo_folder = ''
-        self.diff_engine = None
+        # self.diff_engine = None
+        self.gui = GUI_SELECT
         if code:
             self.object_name = self.extract_object_name_from_code(chapter_name, code)
             self.denodo_folder = self.extract_denodo_folder_name_from_code(chapter_name, code)
         elif compare_code:
             self.object_name = self.extract_object_name_from_code(chapter_name, compare_code)
             self.denodo_folder = self.extract_denodo_folder_name_from_code(chapter_name, compare_code)
-            self.set_compare_code(compare_code)
+            self.set_compare_code(compare_code, mode)
 
         if self.object_name:
             self.setText(0, self.object_name)
 
         self.difference = ''
         self.color = WHITE
-        self.compare()
-        self.pack()
+        if mode & (COMP_FILE | COMP_REPO):
+            self.compare()
 
-    def set_compare_code(self, compare_code):
+    def set_compare_code(self, compare_code, mode):
+        self.mode |= mode
         self.compare_code = compare_code
         self.compare()
 
@@ -90,11 +91,13 @@ class CodeItem(QTreeWidgetItem):
                     self.difference = self.get_diff(self.code, self.compare_code)
             else:
                 self.set_color(RED)
+                self.difference = ''
         else:
             if self.compare_code:
                 self.set_color(GREEN)
+                self.difference = ''
             else:
-                self.set_color(WHITE)
+                self.suicide()
 
     def get_diff(self, code, compare_code):
         former_code_split = (code + '\n').splitlines(True)
@@ -104,27 +107,42 @@ class CodeItem(QTreeWidgetItem):
 
     def pack(self):
         self.user_data['chapter_name'] = self.chapter_name
+        self.user_data['object_name'] = self.object_name
         self.user_data['code'] = self.code
         self.user_data['compare_code'] = self.compare_code
         self.user_data['color'] = self.color
         self.user_data['difference'] = self.difference
         self.user_data['denodo_folder'] = self.denodo_folder
+        self.user_data['gui'] = self.gui
+        self.user_data['class_type'] = self.class_type
         self.user_data['check_state'] = self.checkState(0)
         self.setData(0, Qt.UserRole, self.user_data)
 
-    def unpack(self):
-        self.user_data = self.data(0, Qt.UserRole)
+    @staticmethod
+    def unpack(item):
+        item.user_data = item.data(0, Qt.UserRole)
 
-        self.chapter_name = self.user_data['chapter_name']
-        self.code = self.user_data['code']
-        self.compare_code = self.user_data['compare_code']
-        self.color = self.user_data['color']
-        self.difference = self.user_data['difference']
-        self.denodo_folder = self.user_data['denodo_folder']
+        item.chapter_name = item.user_data['chapter_name']
+        item.object_name = item.user_data['object_name']
+        item.code = item.user_data['code']
+        item.compare_code = item.user_data['compare_code']
+        item.color = item.user_data['color']
+        item.difference = item.user_data['difference']
+        item.denodo_folder = item.user_data['denodo_folder']
+        item.gui = item.user_data['gui']
+        item.class_type = item.user_data['class_type']
 
-        self.setData(0, Qt.EditRole, self.object_name)
-        self.setData(0, Qt.ForegroundRole, self.color)
-        self.setData(0, Qt.CheckStateRole, self.user_data['check_state'])
+    def set_gui(self, gui):
+        self.gui = gui
+        if gui == GUI_SELECT:
+            if self.mode & COMP_REPO:
+                self.mode -= COMP_REPO
+            if self.mode & COMP_FILE:
+                self.mode -= COMP_FILE
+            self.set_compare_code('', 0)
+
+    def suicide(self):
+        self.parent().remove_code_item(self.object_name)
 
     def get_file_path(self, folder):
         """
@@ -154,7 +172,9 @@ class CodeItem(QTreeWidgetItem):
         self.object_name = ''
         self.setText(0, '')
         self.code = ''
+        self.compare_code = ''
         self.setData(0, Qt.UserRole, '')
+        self.diff_engine = None
 
     def set_color(self, color):
         """
