@@ -24,7 +24,6 @@ Last edited: November 2017
 from vql_manager_core import *
 from os import path
 from difflib import Differ
-
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
 
@@ -150,10 +149,6 @@ class CodeItem(QTreeWidgetItem):
             if self.mode & COMP_FILE:
                 self.mode -= COMP_FILE
             self.set_compare_code('', 0)
-
-    def hide(self, color_list):
-        if self.color in color_list:
-            self.setHidden(True)
 
     def suicide(self):
         self.parent().remove_child(self)

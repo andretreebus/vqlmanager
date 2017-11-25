@@ -24,7 +24,6 @@ from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemV
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vql_model import VqlModel
 from code_item import CodeItem
-from chapter import Chapter
 
 
 class VQLManagerWindow(QMainWindow):
@@ -180,11 +179,11 @@ class VQLManagerWindow(QMainWindow):
         set_size(self.compare_repository_label)
         set_size(self.base_repository_label)
 
-        self.code_text_edit.setAcceptRichText(False)
+        # self.code_text_edit.setAcceptRichText(False)
         self.code_text_edit.setLineWrapMode(0)
         self.code_text_edit.setReadOnly(True)
-        self.code_text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.code_text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        # self.code_text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        # self.code_text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.code_text_edit.setText("non selected")
         set_size(self.code_text_edit)
 
@@ -554,23 +553,45 @@ class VQLManagerWindow(QMainWindow):
             # convenience names
             item_data = self.code_text_edit_cache
             selector = self.code_show_selector
-            put_text = self.code_text_edit.setText
+            put_text = self.code_text_edit.setHtml
             set_title = self.code_text_edit_label.setText
             object_name = item_data['object_name']
 
             if self._mode & GUI_SELECT:
-                put_text(item_data['code'])
+                html_code = self.format_source_code(object_name, item_data['code'], selector)
                 set_title("Code: " + object_name)
             elif self._mode & GUI_COMPARE:
+
                 if selector & ORIGINAL_CODE:
-                    put_text(item_data['code'])
+                    html_code = self.format_source_code(object_name, item_data['code'], selector)
                     set_title("Original Code: " + object_name)
                 elif selector & COMPARE_CODE:
-                    put_text(item_data['compare_code'])
+                    html_code = self.format_source_code(object_name, item_data['compare_code'],selector)
                     set_title("New Code: " + object_name)
                 elif selector & DIFF_CODE:
-                    put_text(item_data['difference'])
+                    html_code = self.format_source_code(object_name, item_data['difference'], selector)
                     set_title("Differences : " + object_name)
+            put_text(html_code)
+
+    def format_source_code(self, object_name , raw_code, code_type):
+        html = ''
+        if code_type & (ORIGINAL_CODE | COMPARE_CODE):
+            code = raw_code.replace('\n', '<br />')
+            code = code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
+
+            for word in RESERVED_WORDS:
+                code = code.replace(' ' + word + ' ', ' <strong>' + word + '</strong> ')  # rude method here
+            code = code.replace('<br />', '<br />\n')
+
+            body = '<p style="color:' + white + '">' + code + '</p>'
+            body = body.replace(object_name, '<font color="' + red + '">' + object_name + '</font>')
+            html = doc_template(object_name, body)
+            # print(html)
+
+        elif code_type & DIFF_CODE:
+            code = raw_code
+
+        return html
 
     def on_switch_view(self):
         if self._mode & BASE_LOADED:

@@ -36,6 +36,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # Boilerplate python code to start and end the application
-    # and allows it to be in a module or library
+
     main()

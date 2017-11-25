@@ -131,18 +131,6 @@ class Chapter(QTreeWidgetItem):
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
 
-    # def remove_child(self, child):
-    #     index = self.indexOfChild(child)
-    #     if child.class_type == Chapter:
-    #         self.chapter_items.remove(child)
-    #     if child.class_type == CodeItem:
-    #         self.code_items.remove(child)
-    #     child = self.takeChild(index)
-    #     del child
-
-    # def suicide(self):
-    #     self.parent().remove_child(self)
-
     def set_gui(self, gui):
         self.gui = gui
         for chapter in self.chapter_items:

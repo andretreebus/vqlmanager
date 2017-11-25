@@ -76,14 +76,17 @@ class SourceType(QObject):
     FILE = 1 << 10
     REPO = 1 << 11
 
+
 class ViewType(QObject):
     VQL_VIEW = 1 << 12
     DENODO_VIEW = 1 << 13
+
 
 class CodeView(QObject):
     ORIGINAL_CODE = 1 << 14
     COMPARE_CODE = 1 << 15
     DIFF_CODE = 1 << 16
+
 
 Q_FLAGS(GuiType)
 Q_FLAGS(ModelState)
@@ -111,6 +114,7 @@ DENODO_VIEW = ViewType.DENODO_VIEW
 ORIGINAL_CODE = CodeView.ORIGINAL_CODE
 COMPARE_CODE = CodeView.COMPARE_CODE
 DIFF_CODE = CodeView.DIFF_CODE
+
 
 def translate_colors(item_color, to_text=True):
     """
@@ -175,7 +179,29 @@ def show_mode(mode):
 
 def get_reserved_words():
     with open('denodo_reserved_words.txt') as f:
-        return [word.strip() for word in f.readlines()]
+        file = f.read()
+        words = file.split()
+        words.append(DELIMITER)
+        words.extend(CHAPTER_NAMES)
+        reserved_words = reversed(sorted(words, key=len))
+        return reserved_words
 
 
 RESERVED_WORDS = get_reserved_words()
+
+
+# <link rel="stylesheet" type="text/css" href="mystyle.css">
+def doc_template(object_name, body):
+    doc = '''
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>''' + object_name + '''</title>
+    <meta name="description" content="Denodo code part">
+  </head>
+  <body>''' + body + '''</body>
+</html>
+'''
+    return doc
+

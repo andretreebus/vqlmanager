@@ -47,7 +47,7 @@ class VqlModel(QTreeWidget):
         # root is the first/parent node for all QTreeWidgetItem children
         self.root = self.invisibleRootItem()
 
-        # chapters are stored in a list of Chapters inherrited from QTreeWidgetItem
+        # chapters are stored in a list of Chapters inherited from QTreeWidgetItem
         self.chapters = list()
 
         # initialize by adding empty chapters
@@ -60,12 +60,6 @@ class VqlModel(QTreeWidget):
 
         self.color_filter = None
 
-    # def remove_unselected(self):
-    #     for i in reversed(range(self.childCount())):
-    #         child = self.child(i)
-    #
-    #         self.removeChild(child)
-    #
     def pack(self):
         for chapter in self.chapters:
             chapter.pack(self.color_filter)
