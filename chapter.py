@@ -73,6 +73,7 @@ class Chapter(QTreeWidgetItem):
         self.user_data['gui'] = self.gui
         self.user_data['class_type'] = self.class_type
         self.user_data['selected'] = self.is_selected()
+        self.user_data['expanded'] = self.isExpanded()
         for code_item in self.code_items:
             code_item.chapter_name = self.name
             code_item.pack(color_filter)
@@ -80,6 +81,7 @@ class Chapter(QTreeWidgetItem):
             chapter.parent_chapter_name = self.name
             chapter.pack(color_filter)
         # self.user_data['selected_child_count'] = self.selected_child_count
+        self.set_color_based_on_children(self.gui)
         self.setData(0, Qt.UserRole, self.user_data)
 
     @staticmethod
@@ -93,7 +95,7 @@ class Chapter(QTreeWidgetItem):
         item.gui = item.user_data['gui']
         item.class_type = item.user_data['class_type']
         item.is_selected = item.user_data['selected']
-
+        item.setExpanded(item.user_data['expanded'])
         deletes = list()
         for i in range(item.childCount()):
             child = item.child(i)

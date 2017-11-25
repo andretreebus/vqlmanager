@@ -211,7 +211,7 @@ class VqlModel(QTreeWidget):
                 chapter.set_color_based_on_children(GUI_SELECT)
             elif mode & (COMP_FILE | COMP_REPO):
                 chapter.set_color_based_on_children(GUI_COMPARE)
-            chapter.pack(self.color_filter)
+                chapter.pack(self.color_filter)
 
     def tree_reset(self):
         """

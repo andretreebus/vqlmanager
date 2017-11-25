@@ -76,15 +76,20 @@ class SourceType(QObject):
     FILE = 1 << 10
     REPO = 1 << 11
 
-class ViewType:
+class ViewType(QObject):
     VQL_VIEW = 1 << 12
     DENODO_VIEW = 1 << 13
 
-
+class CodeView(QObject):
+    ORIGINAL_CODE = 1 << 14
+    COMPARE_CODE = 1 << 15
+    DIFF_CODE = 1 << 16
 
 Q_FLAGS(GuiType)
 Q_FLAGS(ModelState)
 Q_FLAGS(SourceType)
+Q_FLAGS(ViewType)
+Q_FLAGS(CodeView)
 
 GUI_NONE = GuiType.GUI_NONE
 GUI_SELECT = GuiType.GUI_SELECT
@@ -103,6 +108,9 @@ REPO = SourceType.REPO
 VQL_VIEW = ViewType.VQL_VIEW
 DENODO_VIEW = ViewType.DENODO_VIEW
 
+ORIGINAL_CODE = CodeView.ORIGINAL_CODE
+COMPARE_CODE = CodeView.COMPARE_CODE
+DIFF_CODE = CodeView.DIFF_CODE
 
 def translate_colors(item_color, to_text=True):
     """

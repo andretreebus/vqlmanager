@@ -38,32 +38,32 @@ class VQLManagerWindow(QMainWindow):
         :type parent: Qt.Window
         :rtype: nothing
         """
-        self.tick = 0
+        # initialize main window calling its parent
+        super(VQLManagerWindow, self).__init__(parent, Qt.Window)
+
         # root is the folder from which this file runs
         self._root = QFileInfo(__file__).absolutePath()
         self.working_folder = ''
-        select_button_lables = ['All', 'Lost', 'New', 'Same', 'Changed']
-        diff_button_lables = ['Original', 'New', 'Changes']
-        # initialize main window calling its parent
-        super(VQLManagerWindow, self).__init__(parent, Qt.Window)
+        select_button_labels = [('All', white), ('Lost', red), ('New', green), ('Same', white), ('Changed', yellow)]
+        diff_button_labels = [('Original', white), ('New', green), ('Changes', yellow)]
 
         # instanciate widgets
         self.mainwidget = QWidget(self, flags=Qt.Widget)
         self.layout = QGridLayout(self.mainwidget)
 
-        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, select_button_lables)
+        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, select_button_labels)
         self.all_chapters_treeview = VqlModel(self.mainwidget)
         self.selected_treeview = QTreeWidget(self.mainwidget)
 
-        self.command_text_edit_label = QLabel(self.mainwidget)
+        self.code_text_edit_label = QLabel(self.mainwidget)
 
         self.mode_label = QLabel(self.mainwidget)
         self.base_repository_label = QLabel(self.mainwidget)
         self.compare_repository_label = QLabel(self.mainwidget)
         self.selection_viewer_label = QLabel(self.mainwidget)
 
-        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_lables)
-        self.code_txtEdit = QTextEdit(self.mainwidget)
+        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_labels)
+        self.code_text_edit = QTextEdit(self.mainwidget)
         self.statusBar = QStatusBar(self)
 
         #  Actions and Menubar ###############################################################################
@@ -118,7 +118,8 @@ class VQLManagerWindow(QMainWindow):
 
         self._mode = 0
         self.switch_to_mode(GUI_NONE)
-
+        self.code_show_selector = ORIGINAL_CODE
+        self.code_text_edit_cache = None
         # # self.switch_to_mode(GUI_SELECT | BASE_FILE)
         # file = '/home/andre/PycharmProjects/vql/data/db.vql'
         # if self.load_model_from_file(file, BASE_FILE):
@@ -171,21 +172,21 @@ class VQLManagerWindow(QMainWindow):
         self.selected_treeview.setColumnCount(1)
         set_size(self.selected_treeview)
 
-        self.command_text_edit_label.setText("Command:")
+        self.code_text_edit_label.setText("Command:")
 
-        set_size(self.command_text_edit_label)
+        set_size(self.code_text_edit_label)
         set_size(self.mode_label)
         set_size(self.selection_viewer_label)
         set_size(self.compare_repository_label)
         set_size(self.base_repository_label)
 
-        self.code_txtEdit.setAcceptRichText(False)
-        self.code_txtEdit.setLineWrapMode(0)
-        self.code_txtEdit.setReadOnly(True)
-        self.code_txtEdit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.code_txtEdit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.code_txtEdit.setText("non selected")
-        set_size(self.code_txtEdit)
+        self.code_text_edit.setAcceptRichText(False)
+        self.code_text_edit.setLineWrapMode(0)
+        self.code_text_edit.setReadOnly(True)
+        self.code_text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.code_text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.code_text_edit.setText("non selected")
+        set_size(self.code_text_edit)
 
         set_size(self.select_buttons)
         set_size(self.diff_buttons)
@@ -206,9 +207,9 @@ class VQLManagerWindow(QMainWindow):
 
         self.layout.addWidget(self.selection_viewer_label,  0, 1, 4, 1)
         self.layout.addWidget(self.selected_treeview,       4, 1, 1, 1)
-        self.layout.addWidget(self.command_text_edit_label, 5, 1, 1, 1)
+        self.layout.addWidget(self.code_text_edit_label, 5, 1, 1, 1)
         self.layout.addWidget(self.diff_buttons,            6, 1, 1, 1)
-        self.layout.addWidget(self.code_txtEdit,            7, 1, 1, 1)
+        self.layout.addWidget(self.code_text_edit, 7, 1, 1, 1)
 
         self.layout.setRowStretch(0, 1)
         self.layout.setRowStretch(1, 1)
@@ -299,8 +300,9 @@ class VQLManagerWindow(QMainWindow):
         widget = QWidget(main_widget)  # central widget
         widget.setLayout(layout)
         group = QButtonGroup(widget)  # Number group
-        for i, label in enumerate(button_list):
-            btn = QRadioButton(label)
+        for i, label_color in enumerate(button_list):
+            btn = QRadioButton(label_color[0])
+            btn.setStyleSheet("color: " + label_color[1])
             if i == 0:
                 btn.setChecked(True)
             group.addButton(btn)
@@ -379,13 +381,14 @@ class VQLManagerWindow(QMainWindow):
         #         button.setChecked(False)
 
         text = button.text()
-        print(text)
+
         if text == 'Original':
-            pass
+            self.code_show_selector = ORIGINAL_CODE
         elif text == 'New':
-            pass
+            self.code_show_selector = COMPARE_CODE
         elif text == 'Changes':
-            pass
+            self.code_show_selector = DIFF_CODE
+        self.show_code_text()
 
     def on_open(self, new_mode):
         """
@@ -508,8 +511,8 @@ class VQLManagerWindow(QMainWindow):
         elif reset_mode & GUI_COMPARE:
             self.all_chapters_treeview.tree_reset_compare()
         self.update_tree_widgets()
-        self.code_txtEdit.setText('')
-        self.command_text_edit_label.setText('Command: ')
+        self.code_text_edit.setText('')
+        self.code_text_edit_label.setText('Command: ')
         self.switch_to_mode(GUI_NONE | VQL_VIEW)
 
     def on_selection_changed(self, item, *_):
@@ -532,11 +535,42 @@ class VQLManagerWindow(QMainWindow):
         :type col: int
         :return: Nothing
         """
-        self.code_txtEdit.setText("non selected")
-        self.command_text_edit_label.setText("Denodo Code:")
-        if item.data(col, Qt.UserRole)['class_type'] == CodeItem:
-            self.code_txtEdit.setText(item.data(col, Qt.UserRole)['code'])
-            self.command_text_edit_label.setText("Denodo Code: " + item.data(col, Qt.UserRole)['object_name'])
+
+        if item:
+            item_data = item.data(col, Qt.UserRole)
+            if item_data['class_type'] == CodeItem:
+                cache = dict()
+                cache['object_name'] = item_data['object_name']
+                cache['code'] = item_data['code']
+                cache['compare_code'] = item_data['compare_code']
+                cache['difference'] = item_data['difference']
+                self.code_text_edit_cache = cache
+                self.show_code_text()
+            else:
+                self.code_text_edit_cache = None
+
+    def show_code_text(self):
+        if self.code_text_edit_cache:
+            # convenience names
+            item_data = self.code_text_edit_cache
+            selector = self.code_show_selector
+            put_text = self.code_text_edit.setText
+            set_title = self.code_text_edit_label.setText
+            object_name = item_data['object_name']
+
+            if self._mode & GUI_SELECT:
+                put_text(item_data['code'])
+                set_title("Code: " + object_name)
+            elif self._mode & GUI_COMPARE:
+                if selector & ORIGINAL_CODE:
+                    put_text(item_data['code'])
+                    set_title("Original Code: " + object_name)
+                elif selector & COMPARE_CODE:
+                    put_text(item_data['compare_code'])
+                    set_title("New Code: " + object_name)
+                elif selector & DIFF_CODE:
+                    put_text(item_data['difference'])
+                    set_title("Differences : " + object_name)
 
     def on_switch_view(self):
         if self._mode & BASE_LOADED:
