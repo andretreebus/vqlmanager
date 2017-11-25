@@ -48,7 +48,7 @@ class Chapter(QTreeWidgetItem):
         self.user_data = dict()
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
-        self.setFlags(ITEM_FLAG_ALL)
+        # self.setFlags(ITEM_FLAG_ALL)
         self.class_type = Chapter
         self.name = name
         self.setText(0, name)
@@ -58,34 +58,29 @@ class Chapter(QTreeWidgetItem):
         self.parent_chapter_name = ''
         self.color = WHITE
         self.gui = GUI_SELECT
-        self.selected_child_count = 0
-        self.pack()
+        self.pack(None)
 
     # General functions
 
-    def pack(self):
+    def pack(self, color_filter):
         self.user_data['name'] = self.name
         self.user_data['header'] = self.header
         self.user_data['code_items'] = self.code_items
         self.user_data['chapter_items'] = self.chapter_items
         self.user_data['parent_chapter_name'] = self.parent_chapter_name
         self.user_data['color'] = self.color
-        self.user_data['check_state'] = self.checkState(0)
+        # self.user_data['check_state'] = self.checkState(0)
         self.user_data['gui'] = self.gui
         self.user_data['class_type'] = self.class_type
-        self.setData(0, Qt.UserRole, self.user_data)
-        self.selected_child_count = 0
+        self.user_data['selected'] = self.is_selected()
         for code_item in self.code_items:
             code_item.chapter_name = self.name
-            if code_item.is_selected():
-                self.selected_child_count += 1
-            code_item.pack()
+            code_item.pack(color_filter)
         for chapter in self.chapter_items:
             chapter.parent_chapter_name = self.name
-            if chapter.is_selected():
-                self.selected_child_count += 1
-            chapter.pack()
-        self.user_data['selected_child_count'] = self.selected_child_count
+            chapter.pack(color_filter)
+        # self.user_data['selected_child_count'] = self.selected_child_count
+        self.setData(0, Qt.UserRole, self.user_data)
 
     @staticmethod
     def unpack(item):
@@ -97,23 +92,29 @@ class Chapter(QTreeWidgetItem):
         item.chapter_items = item.user_data['chapter_items']
         item.gui = item.user_data['gui']
         item.class_type = item.user_data['class_type']
-        item.selected_child_count = item.user_data['selected_child_count']
-        item = QTreeWidgetItem()
+        item.is_selected = item.user_data['selected']
 
         deletes = list()
         for i in range(item.childCount()):
             child = item.child(i)
-            class_type = child.data(0, Qt.UserRole)['class_type']
-            if class_type == Chapter:
-                if (child.childCount() == 0) or (child.checkState == UNCHECKED):
-                    deletes.append(child)
-            elif class_type == CodeItem:
-                if child.checkState == UNCHECKED:
-                    deletes.append(child)
-            else:
-                class_type.unpack(child)
-        for child in deletes:
+            if child.checkState(0) == UNCHECKED:
+                deletes.append(child)
+        for child in reversed(deletes):
             item.takeChild(item.indexOfChild(child))
+
+        deletes = list()
+        for i in range(item.childCount()):
+            child = item.child(i)
+            item_class = child.data(0, Qt.UserRole)['class_type']
+            if child.childCount() == 0 and not item_class == CodeItem:
+                deletes.append(child)
+        for child in reversed(deletes):
+            item.takeChild(item.indexOfChild(child))
+
+        for i in range(item.childCount()):
+            child = item.child(i)
+            item_class = child.data(0, Qt.UserRole)['class_type']
+            item_class.unpack(child)
 
     @staticmethod
     def make_header(chapter_name):
@@ -128,12 +129,17 @@ class Chapter(QTreeWidgetItem):
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
 
-    def remove_code_item(self, object_name):
-        _, code_item = self.get_code_item_by_object_name(object_name)
-        index = self.indexOfChild(code_item)
-        self.code_items.remove(code_item)
-        child = self.takeChild(index)
-        del child
+    # def remove_child(self, child):
+    #     index = self.indexOfChild(child)
+    #     if child.class_type == Chapter:
+    #         self.chapter_items.remove(child)
+    #     if child.class_type == CodeItem:
+    #         self.code_items.remove(child)
+    #     child = self.takeChild(index)
+    #     del child
+
+    # def suicide(self):
+    #     self.parent().remove_child(self)
 
     def set_gui(self, gui):
         self.gui = gui
@@ -147,8 +153,10 @@ class Chapter(QTreeWidgetItem):
             self.set_color(color)
             return
 
-        colors = [translate_colors(code_item.color, to_text=True) for code_item in self.code_items]
-        colors.extend([translate_colors(chapter_item.color, to_text=True) for chapter_item in self.chapter_items])
+        colors = [translate_colors(code_item.color, to_text=True)
+                  for code_item in self.code_items if not code_item.isHidden()]
+        colors.extend([translate_colors(chapter_item.color, to_text=True)
+                       for chapter_item in self.chapter_items if not chapter_item.isHidden()])
         unique_colors = list(set(colors))
         length = len(unique_colors)
         if length == 0:

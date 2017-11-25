@@ -50,36 +50,38 @@ class CodeItem(QTreeWidgetItem):
         self.user_data = dict()
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
-        self.setFlags(ITEM_FLAG_ALL)
+        # self.setFlags(ITEM_FLAG_ALL)  # from parent
         self.class_type = CodeItem
         self.chapter_name = chapter_name
         self.mode = mode
         self.code = code
-        self.compare_code = ''
+        self.compare_code = compare_code
         self.object_name = ''
         self.denodo_folder = ''
-        # self.diff_engine = None
+        self.difference = ''
+        self.color = WHITE
         self.gui = GUI_SELECT
         if code:
-            self.object_name = self.extract_object_name_from_code(chapter_name, code)
-            self.denodo_folder = self.extract_denodo_folder_name_from_code(chapter_name, code)
-        elif compare_code:
-            self.object_name = self.extract_object_name_from_code(chapter_name, compare_code)
-            self.denodo_folder = self.extract_denodo_folder_name_from_code(chapter_name, compare_code)
+            self.object_name = self.extract_object_name_from_code(self.chapter_name, self.code)
+            self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.code)
+
+        if compare_code:
+            self.object_name = self.extract_object_name_from_code(self.chapter_name, self.compare_code)
+            self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.compare_code)
             self.set_compare_code(compare_code, mode)
 
         if self.object_name:
             self.setText(0, self.object_name)
 
-        self.difference = ''
-        self.color = WHITE
         if mode & (COMP_FILE | COMP_REPO):
             self.compare()
+        self.pack(None)
 
     def set_compare_code(self, compare_code, mode):
-        self.mode |= mode
-        self.compare_code = compare_code
-        self.compare()
+        if compare_code:
+            self.mode |= mode
+            self.compare_code = compare_code
+            self.compare()
 
     def compare(self):
         if self.code:
@@ -105,7 +107,15 @@ class CodeItem(QTreeWidgetItem):
         diff = list(self.diff_engine.compare(former_code_split, next_code_split))
         return ''.join(diff)
 
-    def pack(self):
+    def pack(self, color_filter):
+        if color_filter:
+            if not self.color == color_filter:
+                self.setHidden(True)
+            else:
+                self.setHidden(False)
+        else:
+            self.setHidden(False)
+
         self.user_data['chapter_name'] = self.chapter_name
         self.user_data['object_name'] = self.object_name
         self.user_data['code'] = self.code
@@ -115,13 +125,12 @@ class CodeItem(QTreeWidgetItem):
         self.user_data['denodo_folder'] = self.denodo_folder
         self.user_data['gui'] = self.gui
         self.user_data['class_type'] = self.class_type
-        self.user_data['check_state'] = self.checkState(0)
+        self.user_data['selected'] = self.is_selected()
         self.setData(0, Qt.UserRole, self.user_data)
 
     @staticmethod
     def unpack(item):
         item.user_data = item.data(0, Qt.UserRole)
-
         item.chapter_name = item.user_data['chapter_name']
         item.object_name = item.user_data['object_name']
         item.code = item.user_data['code']
@@ -131,6 +140,7 @@ class CodeItem(QTreeWidgetItem):
         item.denodo_folder = item.user_data['denodo_folder']
         item.gui = item.user_data['gui']
         item.class_type = item.user_data['class_type']
+        item.is_selected = item.user_data['selected']
 
     def set_gui(self, gui):
         self.gui = gui
@@ -141,8 +151,12 @@ class CodeItem(QTreeWidgetItem):
                 self.mode -= COMP_FILE
             self.set_compare_code('', 0)
 
+    def hide(self, color_list):
+        if self.color in color_list:
+            self.setHidden(True)
+
     def suicide(self):
-        self.parent().remove_code_item(self.object_name)
+        self.parent().remove_child(self)
 
     def get_file_path(self, folder):
         """
@@ -185,37 +199,6 @@ class CodeItem(QTreeWidgetItem):
         """
         self.color = color
         self.setForeground(0, color)
-
-    # @staticmethod
-    # def make_selected_treeview_item(parent, col, text, user_data, color):
-    #     """
-    #     Factory for QTreeWidgetItem instances for the selected_treeview
-    #     They differ a bit from the all_chapter_treeview: no checkboxes etc
-    #
-    #     :param parent: The parent of the item, either a QTreeWidget or another QTreeWidgetItem
-    #     :type parent: QTreeWidgetItem
-    #     :param col: column index in the QTreeWidget, always 0
-    #     :type col: int
-    #     :param text: The text shown, a chapter name or a vql filename
-    #     :type text: str
-    #     :param user_data: the code in that vql file
-    #     :type user_data: str
-    #     :param color: the color of the item
-    #     :type color: QBrush
-    #     :return: A fully dressed QTreeWidgetItem instance for the selected_treeview
-    #     :rtype: QTreeWidgetItem
-    #     """
-    #
-    #     item = QTreeWidgetItem(parent)
-    #     item.setCheckState(col, CHECKED)
-    #     item.setData(col, Qt.CheckStateRole, QVariant())
-    #     # item.setData(col, Qt.UserRole, None)
-    #     item.childIndicatorPolicy = 2
-    #     item.setFlags(ITEM_FLAG_SEL)
-    #     item.setText(col, text)
-    #     item.setData(col, Qt.UserRole, user_data)
-    #     item.setForeground(0, color)
-    #     return item
 
     @staticmethod
     def extract_denodo_folder_name_from_code(chapter_name, code):

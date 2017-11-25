@@ -18,12 +18,13 @@ from vql_manager_core import *
 
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QTreeWidgetItemIterator
-from PyQt5.QtWidgets import QGridLayout, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator
+from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vql_model import VqlModel
 from code_item import CodeItem
+from chapter import Chapter
 
 
 class VQLManagerWindow(QMainWindow):
@@ -41,22 +42,27 @@ class VQLManagerWindow(QMainWindow):
         # root is the folder from which this file runs
         self._root = QFileInfo(__file__).absolutePath()
         self.working_folder = ''
-
+        select_button_lables = ['All', 'Lost', 'New', 'Same', 'Changed']
+        diff_button_lables = ['Original', 'New', 'Changes']
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
 
         # instanciate widgets
         self.mainwidget = QWidget(self, flags=Qt.Widget)
         self.layout = QGridLayout(self.mainwidget)
+
+        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, select_button_lables)
         self.all_chapters_treeview = VqlModel(self.mainwidget)
         self.selected_treeview = QTreeWidget(self.mainwidget)
+
         self.command_text_edit_label = QLabel(self.mainwidget)
 
         self.mode_label = QLabel(self.mainwidget)
         self.base_repository_label = QLabel(self.mainwidget)
         self.compare_repository_label = QLabel(self.mainwidget)
-
         self.selection_viewer_label = QLabel(self.mainwidget)
+
+        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_lables)
         self.code_txtEdit = QTextEdit(self.mainwidget)
         self.statusBar = QStatusBar(self)
 
@@ -96,6 +102,10 @@ class VQLManagerWindow(QMainWindow):
         # CallbacksL Slots and Signals ###########################################################################
         self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
         self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
+
+        # Radio buttons
+        self.select_buttons_group.buttonClicked.connect(self.on_select_buttons_clicked)
+        self.diff_buttons_group.buttonClicked.connect(self.on_diff_buttons_clicked)
 
         # connect update timer
         self.update_timer.timeout.connect(self.update_tree_widgets)
@@ -137,9 +147,10 @@ class VQLManagerWindow(QMainWindow):
         self.layout.setSpacing(8)
 
         # Add Widgets ####################################################################################
+        self.all_chapters_treeview.invisibleRootItem().setFlags(ITEM_FLAG_ALL)
         self.all_chapters_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.all_chapters_treeview.setSelectionMode(QAbstractItemView.NoSelection)
-        self.all_chapters_treeview.setIconSize(QSize(16, 16))
+        # self.all_chapters_treeview.setIconSize(QSize(16, 16))
         self.all_chapters_treeview.setUniformRowHeights(True)
         self.all_chapters_treeview.setHeaderLabel('No file selected')
         # self.all_chapters_treeview.setToolTip("Select code parts: Right mouse click")
@@ -148,6 +159,7 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.setColumnCount(1)
         set_size(self.all_chapters_treeview)
 
+        self.selected_treeview.invisibleRootItem().setFlags(ITEM_FLAG_SEL)
         self.selected_treeview = QTreeWidget(self.mainwidget)
         self.selected_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.selected_treeview.setSelectionMode(QAbstractItemView.NoSelection)
@@ -155,7 +167,7 @@ class VQLManagerWindow(QMainWindow):
         self.selected_treeview.setHeaderLabel('View Pane')
         self.selected_treeview.setToolTip("Selected parts: Click to view source code")
         self.selected_treeview.setToolTipDuration(2000)
-        self.selected_treeview.setIconSize(QSize(16, 16))
+        # self.selected_treeview.setIconSize(QSize(16, 16))
         self.selected_treeview.setColumnCount(1)
         set_size(self.selected_treeview)
 
@@ -175,26 +187,38 @@ class VQLManagerWindow(QMainWindow):
         self.code_txtEdit.setText("non selected")
         set_size(self.code_txtEdit)
 
+        set_size(self.select_buttons)
+        set_size(self.diff_buttons)
+
+        self.select_buttons.setHidden(True)
+        self.diff_buttons.setHidden(True)
+
+
         #  Layout ################################################################################
         # left pane
         self.layout.addWidget(self.mode_label,                0, 0, 1, 1)
-        self.layout.addWidget(self.base_repository_label, 1, 0, 1, 1)
-        self.layout.addWidget(self.compare_repository_label, 2, 0, 1, 1)
-        self.layout.addWidget(self.all_chapters_treeview,     3, 0, 3, 1)
+        self.layout.addWidget(self.base_repository_label,     1, 0, 1, 1)
+        self.layout.addWidget(self.compare_repository_label,  2, 0, 1, 1)
+        self.layout.addWidget(self.select_buttons,            3, 0, 1, 1)
+        self.layout.addWidget(self.all_chapters_treeview,     4, 0, 4, 1)
 
         # right pane
 
-        self.layout.addWidget(self.selection_viewer_label,  0, 1, 3, 1)
-        self.layout.addWidget(self.selected_treeview,       3, 1)
-        self.layout.addWidget(self.command_text_edit_label, 4, 1)
-        self.layout.addWidget(self.code_txtEdit, 5, 1)
+        self.layout.addWidget(self.selection_viewer_label,  0, 1, 4, 1)
+        self.layout.addWidget(self.selected_treeview,       4, 1, 1, 1)
+        self.layout.addWidget(self.command_text_edit_label, 5, 1, 1, 1)
+        self.layout.addWidget(self.diff_buttons,            6, 1, 1, 1)
+        self.layout.addWidget(self.code_txtEdit,            7, 1, 1, 1)
 
         self.layout.setRowStretch(0, 1)
         self.layout.setRowStretch(1, 1)
         self.layout.setRowStretch(2, 1)
-        self.layout.setRowStretch(3, 10)
-        self.layout.setRowStretch(4, 1)
-        self.layout.setRowStretch(5, 10)
+        self.layout.setRowStretch(3, 1)
+
+        self.layout.setRowStretch(4, 12)
+        self.layout.setRowStretch(5, 1)
+        self.layout.setRowStretch(6, 1)
+        self.layout.setRowStretch(7, 12)
 
         self.layout.setColumnStretch(0, 1)
         self.layout.setColumnStretch(1, 1)
@@ -252,7 +276,6 @@ class VQLManagerWindow(QMainWindow):
         self.reset_action.triggered.connect(lambda: self.on_reset(GUI_NONE))
 
         #  Menu
-
         self.menubar.setGeometry(QRect(0, 0, 1200, 23))
 
         self.filemenu = self.menubar.addMenu('&File')
@@ -269,6 +292,20 @@ class VQLManagerWindow(QMainWindow):
         self.tool_menu.addAction(self.denodo_folder_structure_action)
         self.tool_menu.addSeparator()
         self.tool_menu.addAction(self.reset_action)
+
+    @staticmethod
+    def get_buttons_widget(main_widget, button_list):
+        layout = QHBoxLayout()  # layout for the central widget
+        widget = QWidget(main_widget)  # central widget
+        widget.setLayout(layout)
+        group = QButtonGroup(widget)  # Number group
+        for i, label in enumerate(button_list):
+            btn = QRadioButton(label)
+            if i == 0:
+                btn.setChecked(True)
+            group.addButton(btn)
+            layout.addWidget(btn, 0, Qt.AlignLeft,)
+        return widget, group
 
     def get_mode(self):
         return self._mode
@@ -288,6 +325,8 @@ class VQLManagerWindow(QMainWindow):
             self.all_chapters_treeview.setHeaderLabel('Selection Pane')
         elif new_mode & GUI_SELECT:
             self.mode_label.setText("View Mode: Selection")
+            self.diff_buttons.setHidden(True)
+            self.select_buttons.setHidden(True)
             if new_mode & BASE_LOADED:
                 if new_mode & BASE_FILE:
                     self.base_repository_label.setText('File : ' + self.base_repository_file)
@@ -296,6 +335,8 @@ class VQLManagerWindow(QMainWindow):
             self.compare_repository_label.setText('')
         elif new_mode & GUI_COMPARE:
             self.mode_label.setText("View Mode: Compare")
+            self.diff_buttons.setHidden(False)
+            self.select_buttons.setHidden(False)
             if new_mode & COMP_LOADED:
                 if new_mode & COMP_FILE:
                     self.compare_repository_label.setText('File : ' + self.compare_repository_file)
@@ -310,6 +351,41 @@ class VQLManagerWindow(QMainWindow):
         self.statusBar.showMessage(show_mode(self._mode))
 
     # Event handlers for opening and saving models
+
+    def on_select_buttons_clicked(self, button):
+        # buttons = self.select_buttons.buttons()
+        # for myButton in buttons:
+        #     if myButton != button:
+        #         button.setChecked(False)
+
+        text = button.text()
+        tree = self.all_chapters_treeview
+        if text == 'All':
+            tree.color_filter = None
+        elif text == 'Lost':
+            tree.color_filter = RED
+        elif text == 'New':
+            tree.color_filter = GREEN
+        elif text == 'Same':
+            tree.color_filter = WHITE
+        elif text == 'Changed':
+            tree.color_filter = YELLOW
+        self.update_tree_widgets()
+
+    def on_diff_buttons_clicked(self, button):
+        # buttons = self.select_buttons.buttons()
+        # for myButton in buttons:
+        #     if myButton != button:
+        #         button.setChecked(False)
+
+        text = button.text()
+        print(text)
+        if text == 'Original':
+            pass
+        elif text == 'New':
+            pass
+        elif text == 'Changes':
+            pass
 
     def on_open(self, new_mode):
         """
@@ -463,13 +539,14 @@ class VQLManagerWindow(QMainWindow):
             self.command_text_edit_label.setText("Denodo Code: " + item.data(col, Qt.UserRole)['object_name'])
 
     def on_switch_view(self):
-        if self.denodo_folder_structure_action.isChecked():
-            self.denodo_folder_structure_action.setText('Switch to VQL View')
-            self.all_chapters_treeview.change_view(DENODO_VIEW)
-        else:
-            self.denodo_folder_structure_action.setText('Switch to DENODO View')
-            self.all_chapters_treeview.change_view(VQL_VIEW)
-        self.update_tree_widgets()
+        if self._mode & BASE_LOADED:
+            if self.denodo_folder_structure_action.isChecked():
+                self.denodo_folder_structure_action.setText('Switch to VQL View')
+                self.all_chapters_treeview.change_view(DENODO_VIEW, self._mode)
+            else:
+                self.denodo_folder_structure_action.setText('Switch to DENODO View')
+                self.all_chapters_treeview.change_view(VQL_VIEW, self._mode)
+            self.update_tree_widgets()
 
     # dialogs for opening and saving
 
@@ -966,6 +1043,8 @@ class VQLManagerWindow(QMainWindow):
         col = 0
         tree_sel = self.selected_treeview
         root_sel = tree_sel.invisibleRootItem()
+        # root_sel.setFlags(ITEM_FLAG_SEL)
+
         tree_all = self.all_chapters_treeview
         root_all = tree_all.invisibleRootItem()
         tree_sel.clear()
@@ -977,7 +1056,6 @@ class VQLManagerWindow(QMainWindow):
         item_iterator = QTreeWidgetItemIterator(tree_sel)
         while item_iterator.value():
             item = item_iterator.value()
-            item.setFlags(ITEM_FLAG_SEL)
             item.setData(col, Qt.CheckStateRole, QVariant())
             item_iterator += 1
         self.all_chapters_treeview.blockSignals(blocked)

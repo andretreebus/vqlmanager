@@ -58,9 +58,17 @@ class VqlModel(QTreeWidget):
         self.view = VQL_VIEW
         self.denodo_root = Chapter(None, 'root')
 
+        self.color_filter = None
+
+    # def remove_unselected(self):
+    #     for i in reversed(range(self.childCount())):
+    #         child = self.child(i)
+    #
+    #         self.removeChild(child)
+    #
     def pack(self):
         for chapter in self.chapters:
-            chapter.pack()
+            chapter.pack(self.color_filter)
 
     @staticmethod
     def unpack(tree):
@@ -72,7 +80,7 @@ class VqlModel(QTreeWidget):
             else:
                 item_class = child.data(0, Qt.UserRole)['class_type']
                 item_class.unpack(child)
-        for child in deletes:
+        for child in reversed(deletes):
             tree.takeTopLevelItem(tree.indexOfTopLevelItem(child))
 
     def _add_chapters(self, chapter_names):
@@ -203,7 +211,7 @@ class VqlModel(QTreeWidget):
                 chapter.set_color_based_on_children(GUI_SELECT)
             elif mode & (COMP_FILE | COMP_REPO):
                 chapter.set_color_based_on_children(GUI_COMPARE)
-            chapter.pack()
+            chapter.pack(self.color_filter)
 
     def tree_reset(self):
         """
@@ -235,10 +243,8 @@ class VqlModel(QTreeWidget):
         for chapter in self.chapters:
             chapter.set_gui(GUI_SELECT)
 
-    def change_view(self, new_view):
-        if not self.mode & BASE_LOADED:
-            return
-
+    def change_view(self, new_view, mode):
+        gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)
         if self.view & new_view:
             return
 
@@ -255,39 +261,25 @@ class VqlModel(QTreeWidget):
                 self.view = DENODO_VIEW
             else:
                 # build denodo view
-                self.build_denodo_view()
-                self.change_view(new_view)
+                self.build_denodo_view(gui)
+                self.change_view(new_view, gui)
 
     def switch_view(self):
         temp = self.root.takeChildren()
         self.root.addChildren(self.storage_list)
         self.storage_list = temp
 
-    def build_denodo_view(self):
-        # def extract_folder_names_from_code(_items):
-        #     _folders = OrderedDict()
-        #     folder_names = ((code_item, code_item.extract_denodo_folder_name_from_code(chapter))
-        #                     for chapter, code_item in _items)
-        #
-        #     for code_item, _folder in folder_names:
-        #         if _folder:
-        #             code_item.denodo_folder = _folder
-        #             _folders[_folder] = list()
-        #
-        #     for chapter, code_item in _items:
-        #         if not chapter.name == 'FOLDERS':
-        #             if code_item.denodo_folder:
-        #                 _folders[code_item.denodo_folder].append(code_item)
-        #     return _folders
-
-        items = [(chapter, code_item) for chapter, code_item in self.get_code_items()]
-        folders = extract_folder_names_from_code(items)
-
-        if not folders:
-            return
+    def build_denodo_view(self, gui):
+        folders = OrderedDict()
+        self.pack()
+        for chapter, code_item in self.get_code_items():
+            if code_item.denodo_folder not in folders.keys():
+                folders[code_item.denodo_folder] = list()
+                folders[code_item.denodo_folder].append(code_item)
+            else:
+                folders[code_item.denodo_folder].append(code_item)
 
         # print(folders.keys())
-
         temp_widget = VqlModel(None)
         temp_root = temp_widget.denodo_root
 
@@ -304,8 +296,21 @@ class VqlModel(QTreeWidget):
                 if new_depth > old_depth:
                     parent_item = folder_item
             folder_item = Chapter(parent_item, last_folder)
+            if parent_item is not temp_root:
+                parent_item.chapter_items.append(folder_item)
+                folder_item.gui = parent_item.gui
             old_depth = new_depth
+
             for code_item in code_items:
-                item = folder_item.add_code_item(code_item.object_name, code_item.code, code_item.color, code_item.mode)
+                item = CodeItem(folder_item, code_item.chapter_name, code_item.mode,
+                                code=code_item.code, compare_code=code_item.compare_code)
+
+                folder_item.code_items.append(item)
+
+                # item.set_compare_code(code_item.compare_code, code_item.mode)
+                # item.gui = code_item.gui
                 item.setCheckState(0, code_item.checkState(0))
+            folder_item.set_gui(gui)
+            folder_item.set_color_based_on_children(gui)
+
         self.storage_list = temp_root.takeChildren()
