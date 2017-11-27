@@ -14,10 +14,11 @@ Last edited: November 2017
 """
 
 from os import path, makedirs, listdir, unlink, rmdir
-import subprocess, sys
+import subprocess
+import sys
 from vql_manager_core import *
 
-from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QCoreApplication
+from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
@@ -38,12 +39,24 @@ class VQLManagerWindow(QMainWindow):
         :type parent: Qt.Window
         :rtype: nothing
         """
+
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
+        self.setAttribute(Qt.WA_DeleteOnClose)  # close children on exit
 
         # root is the folder from which this file runs
         self._root = QFileInfo(__file__).absolutePath()
-        self.working_folder = ''
+        images = self._root + '/images/'
+
+        settings = QSettings(COMPANY, APPLICATION_NAME)  # Todo: remove these in production
+        settings.clear()
+
+        self.resize(1200, 800)
+        self.setMinimumSize(QSize(860, 440))
+        self.setIconSize(QSize(32, 32))
+        self.setWindowIcon(QIcon(self._root + '/images/splitter.png'))
+        self.setWindowTitle(APPLICATION_NAME)
+
         select_button_labels = [('All', white), ('Lost', red), ('New', green), ('Same', white), ('Changed', yellow)]
         diff_button_labels = [('Original', white), ('New', green), ('Changes', yellow)]
 
@@ -51,133 +64,174 @@ class VQLManagerWindow(QMainWindow):
         self.mainwidget = QWidget(self, flags=Qt.Widget)
         self.layout = QGridLayout(self.mainwidget)
 
+        # create radio buttons
         self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, select_button_labels)
-        self.all_chapters_treeview = VqlModel(self.mainwidget)
-        self.selected_treeview = QTreeWidget(self.mainwidget)
+        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_labels)
 
+        #create tree widgets VqlModel(self.mainwidget)
+        self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
+                                                             header='Selection Pane',
+                                                             tooltip="")
+
+        self.selected_treeview = self.create_tree_widget(self.mainwidget, QTreeWidget, ITEM_FLAG_SEL,
+                                                         header='View Pane',
+                                                         tooltip="Selected parts: Click to view source code")
+
+        #create labels
         self.code_text_edit_label = QLabel(self.mainwidget)
-
         self.mode_label = QLabel(self.mainwidget)
         self.base_repository_label = QLabel(self.mainwidget)
         self.compare_repository_label = QLabel(self.mainwidget)
         self.selection_viewer_label = QLabel(self.mainwidget)
 
-        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_labels)
+        #create source code view
         self.code_text_edit = QTextEdit(self.mainwidget)
+
+        # create statusbar
         self.statusBar = QStatusBar(self)
 
-        #  Actions and Menubar ###############################################################################
-        self.open_file_action = QAction(QIcon(self._root + '/images/open_file.png'), '&Open File', self)
-        self.open_folder_action = QAction(QIcon(self._root + '/images/open_repo.png'), 'Open &Repository', self)
-        self.export_file_action = QAction(QIcon(self._root + '/images/save_file.png'), 'Save As File', self)
-        self.export_folder_action = QAction(QIcon(self._root + '/images/save_repo.png'), '&Save As Repository', self)
-        self.exit_action = QAction(QIcon(self._root + '/images/exit.png'), '&Exit', self)
+        #  Create Actions and Menubar ###############################################################################
+        self.open_file_action = QAction(QIcon(images + 'open_file.png'), '&Open File', self)
+        self.open_folder_action = QAction(QIcon(images + 'open_repo.png'), 'Open &Repository', self)
+        self.export_file_action = QAction(QIcon(images + 'save_file.png'), 'Save As File', self)
+        self.export_folder_action = QAction(QIcon(images + 'save_repo.png'), '&Save As Repository', self)
+        self.exit_action = QAction(QIcon(images + 'exit.png'), '&Exit', self)
 
-        # Add/Construct menus
-        self.menubar = QMenuBar(self)
+        # Create recent file menu
+        self.max_recent_files = 8
+        self.recent_file_actions = list()
+        self.recent_repository_actions = list()
+        self.compare_recent_file_actions = list()
+        self.compare_recent_repository_actions = list()
 
-        # Compare with File
-        self.open_compare_file_action = QAction(QIcon(self._root + '/images/open_file.png'),
-                                                '&Open File to Compare', self)
-        # Compare with Folder
-        self.open_compare_folder_action = QAction(QIcon(self._root + '/images/open_repo.png'),
-                                                  'Open &Repository to Compare', self)
+        for i in range(self.max_recent_files):
+            action = QAction(self)
+            action.setVisible(False)
+            action.triggered.connect(lambda: self.on_open_recent_files(i, BASE_FILE))
+            self.recent_file_actions.append(action)
 
-        self.denodo_folder_structure_action = QAction(QIcon(self._root + '/images/open_repo.png'),
-                                                      'Denodo Folder Structure', self)
+        for i in range(self.max_recent_files):
+            action = QAction(self)
+            action.setVisible(False)
+            action.triggered.connect(lambda: self.on_open_recent_files(i, BASE_REPO))
+            self.recent_repository_actions.append(action)
+
+        for i in range(self.max_recent_files):
+            action = QAction(self)
+            action.setVisible(False)
+            action.triggered.connect(lambda: self.on_open_recent_files(i, COMP_FILE))
+            self.compare_recent_file_actions.append(action)
+
+        for i in range(self.max_recent_files):
+            action = QAction(self)
+            action.setVisible(False)
+            action.triggered.connect(lambda: self.on_open_recent_files(i, COMP_REPO))
+            self.compare_recent_repository_actions.append(action)
+
+
+        # create compare with File menu
+        self.open_compare_file_action = QAction(QIcon(images + 'open_file.png'), '&Open File to Compare', self)
+        self.open_compare_folder_action = QAction(QIcon(images + 'open_repo.png'), 'Open &Repository to Compare', self)
+        self.denodo_folder_structure_action = QAction(QIcon(images + 'open_repo.png'), 'Denodo Folder Structure', self)
 
         # Reset everything
-        self.reset_action = QAction(QIcon(self._root + '/images/reset.png'), 'Reset &Everything', self)
+        self.reset_action = QAction(QIcon(images + 'reset.png'), 'Reset &Everything', self)
+        # create about actions
+        self.about_action = QAction("&About", self)
+        self.about_qt_action = QAction("About &Qt", self)
 
         #  Menu
         self.menubar = QMenuBar(self)
         self.filemenu = None
-        self.tool_menu = None
+        self.recent_file_separator = None
+        self.recent_file_menu = None
+        self.recent_repository_separator = None
+        self.recent_repository_menu = None
 
+        self.compare_menu = None
+        self.compare_recent_file_menu = None
+        self.compare_recent_repository_menu = None
+        self.compare_recent_repository_separator = None
+        self.compare_recent_file_separator = None
+
+        self.help_menu = None
+
+        self.options_menu = None
         self.update_timer = QTimer()
 
         # Format and setup all widgets
         self.setup_ui()
 
-        # Callbacks Slots and Signals ###########################################################################
-        self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
-        self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
-
-        # Radio buttons
-        self.select_buttons_group.buttonClicked.connect(self.on_select_buttons_clicked)
-        self.diff_buttons_group.buttonClicked.connect(self.on_diff_buttons_clicked)
-
-        # connect update timer
-        self.update_timer.timeout.connect(self.update_tree_widgets)
-
         # Initialize class properties ###########################################################################
+
+        self.working_folder = ''
         self.base_repository_file = ''
         self.base_repository_folder = ''
         self.compare_repository_file = ''
         self.compare_repository_folder = ''
-
         self._mode = 0
         self.switch_to_mode(GUI_NONE)
         self.code_show_selector = ORIGINAL_CODE
         self.code_text_edit_cache = None
+
+    @staticmethod
+    def create_tree_widget(parent, class_type, flags, header=None, tooltip=None):
+        tree_widget = class_type(parent)
+        tree_widget.invisibleRootItem().setFlags(flags)
+        tree_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tree_widget.setSelectionMode(QAbstractItemView.NoSelection)
+        tree_widget.setUniformRowHeights(True)
+        if header:
+            tree_widget.setHeaderLabel(header)
+        if tooltip:
+            tree_widget.setToolTip(tooltip)
+        tree_widget.setToolTipDuration(2000)
+        tree_widget.setColumnCount(1)
+        return tree_widget
+
+    def new_tree_data(self):
+        # create tree widgets VqlModel(self.mainwidget)
+        self.all_chapters_treeview.clear()
+        self.selected_treeview.clear()
+        self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
+                                                             header='Selection Pane',
+                                                             tooltip="")
+
+        self.selected_treeview = self.create_tree_widget(self.mainwidget, QTreeWidget, ITEM_FLAG_SEL,
+                                                         header='View Pane',
+                                                         tooltip="Selected parts: Click to view source code")
+    @staticmethod
+    def resize_widget(some_widget):
+        some_widget.setMinimumSize(QSize(PANE_WIDTH, 0))
+        some_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def setup_ui(self):
         """
         Function setup up all widgets
         :return: nothing
         """
-
-        def set_size(some_widget):
-            some_widget.setMinimumSize(QSize(PANE_WIDTH, 0))
-            some_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        self.resize(1200, 800)
-        self.setMinimumSize(QSize(860, 440))
-        self.setIconSize(QSize(32, 32))
-        self.setWindowIcon(QIcon(self._root + '/images/splitter.png'))
-        self.setWindowTitle("VQL Manager")
-
         self.layout.setContentsMargins(23, 23, 23, 23)
         self.layout.setSpacing(8)
 
         # Add Widgets ####################################################################################
 
-        set_size(self.all_chapters_treeview)
-
-        self.selected_treeview.invisibleRootItem().setFlags(ITEM_FLAG_SEL)
-        self.selected_treeview = QTreeWidget(self.mainwidget)
-        self.selected_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.selected_treeview.setSelectionMode(QAbstractItemView.NoSelection)
-        self.selected_treeview.setUniformRowHeights(True)
-        self.selected_treeview.setHeaderLabel('View Pane')
-        self.selected_treeview.setToolTip("Selected parts: Click to view source code")
-        self.selected_treeview.setToolTipDuration(2000)
-        # self.selected_treeview.setIconSize(QSize(16, 16))
-        self.selected_treeview.setColumnCount(1)
-        set_size(self.selected_treeview)
-
-        self.code_text_edit_label.setText("Command:")
-
-        set_size(self.code_text_edit_label)
-        set_size(self.mode_label)
-        set_size(self.selection_viewer_label)
-        set_size(self.compare_repository_label)
-        set_size(self.base_repository_label)
-
-        # self.code_text_edit.setAcceptRichText(False)
-        self.code_text_edit.setLineWrapMode(0)
-        self.code_text_edit.setReadOnly(True)
-        # self.code_text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        # self.code_text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.code_text_edit.setText("non selected")
-        set_size(self.code_text_edit)
-
-        set_size(self.select_buttons)
-        set_size(self.diff_buttons)
+        self.resize_widget(self.all_chapters_treeview)
+        self.resize_widget(self.selected_treeview)
+        self.resize_widget(self.code_text_edit_label)
+        self.resize_widget(self.mode_label)
+        self.resize_widget(self.selection_viewer_label)
+        self.resize_widget(self.compare_repository_label)
+        self.resize_widget(self.base_repository_label)
+        self.resize_widget(self.code_text_edit)
+        self.resize_widget(self.select_buttons)
+        self.resize_widget(self.diff_buttons)
 
         self.select_buttons.setHidden(True)
         self.diff_buttons.setHidden(True)
-
+        self.code_text_edit.setLineWrapMode(0)
+        self.code_text_edit.setReadOnly(True)
+        self.code_text_edit.setText("non selected")
+        self.code_text_edit_label.setText("Command:")
 
         #  Layout ################################################################################
         # left pane
@@ -260,6 +314,12 @@ class VQLManagerWindow(QMainWindow):
         self.reset_action.setStatusTip('Reset the application to a clean state')
         self.reset_action.triggered.connect(lambda: self.on_reset(GUI_NONE))
 
+        self.about_action.setStatusTip("Show the application's About box")
+        self.about_action.triggered.connect(self.on_about_vql_manager)
+        self.about_qt_action.setStatusTip("Show the Qt library's About box")
+        self.about_qt_action.triggered.connect(self.on_about_qt)
+
+
         #  Menu
         self.menubar.setGeometry(QRect(0, 0, 1200, 23))
 
@@ -268,15 +328,130 @@ class VQLManagerWindow(QMainWindow):
         self.filemenu.addAction(self.open_folder_action)
         self.filemenu.addAction(self.export_file_action)
         self.filemenu.addAction(self.export_folder_action)
+
+        self.recent_file_separator = self.filemenu.addSeparator()
+        self.recent_file_menu = self.filemenu.addMenu('Recent Files')
+        for i in range(self.max_recent_files):
+            self.recent_file_menu.addAction(self.recent_file_actions[i])
+
+        self.recent_repository_separator = self.filemenu.addSeparator()
+        self.recent_repository_menu = self.filemenu.addMenu('Recent Repositories')
+        for i in range(self.max_recent_files):
+            self.recent_repository_menu.addAction(self.recent_repository_actions[i])
+
         self.filemenu.addSeparator()
         self.filemenu.addAction(self.exit_action)
 
-        self.tool_menu = self.menubar.addMenu('&Tools')
-        self.tool_menu.addAction(self.open_compare_file_action)
-        self.tool_menu.addAction(self.open_compare_folder_action)
-        self.tool_menu.addAction(self.denodo_folder_structure_action)
-        self.tool_menu.addSeparator()
-        self.tool_menu.addAction(self.reset_action)
+        self.compare_menu = self.menubar.addMenu('&Compare')
+        self.compare_menu.addAction(self.open_compare_file_action)
+        self.compare_menu.addAction(self.open_compare_folder_action)
+
+        self.compare_recent_file_separator = self.compare_menu.addSeparator()
+        self.compare_recent_file_menu = self.compare_menu.addMenu('Recent Files')
+        for i in range(self.max_recent_files):
+            self.compare_recent_file_menu.addAction(self.recent_file_actions[i])
+
+        self.compare_recent_repository_separator = self.compare_menu.addSeparator()
+        self.compare_recent_repository_menu = self.compare_menu.addMenu('Recent Repositories')
+        for i in range(self.max_recent_files):
+            self.compare_recent_file_menu.addAction(self.recent_repository_actions[i])
+
+        self.options_menu = self.menubar.addMenu('&Options')
+        self.options_menu.addAction(self.denodo_folder_structure_action)
+        self.options_menu.addSeparator()
+        self.options_menu.addAction(self.reset_action)
+
+        self.help_menu = self.menubar.addMenu('&Help')
+        self.help_menu.addAction(self.about_action)
+        self.help_menu.addAction(self.about_qt_action)
+
+        self.update_recent_file_actions()
+
+        # Callbacks Slots and Signals ###########################################################################
+        self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
+        self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
+
+        # Radio buttons
+        self.select_buttons_group.buttonClicked.connect(self.on_select_buttons_clicked)
+        self.diff_buttons_group.buttonClicked.connect(self.on_diff_buttons_clicked)
+
+        # connect update timer
+        self.update_timer.timeout.connect(self.update_tree_widgets)
+
+    def update_recent_file_actions(self):
+
+        settings = QSettings(COMPANY, APPLICATION_NAME)
+        files = settings.value('recent_file_list', type=list)
+        repositories = settings.value('recent_repositories_list', type=list)
+
+        len_files = len(files)
+        len_repositories = len(repositories)
+        update_list = [self.recent_file_actions, self.compare_recent_file_actions]
+
+        for i in range(self.max_recent_files):
+            if i < len_files:
+                text = str(i) + ' ' + path.basename(files[i])
+                for actions in update_list:
+                    actions[i].setText(text)
+                    actions[i].setData(files[i])
+                    actions[i].setVisible(True)
+                    actions[i].setStatusTip(files[i])
+            else:
+                for actions in update_list:
+                    actions[i].setVisible(False)
+        if len_files > 0:
+            self.recent_file_separator.setVisible(True)
+            self.compare_recent_file_separator.setVisible(True)
+
+        update_list = [self.recent_repository_actions, self.compare_recent_repository_actions]
+
+        for i in range(self.max_recent_files):
+            if i < len_repositories:
+                text = str(i) + ' ' + path.basename(path.normpath(repositories[i]))
+                for actions in update_list:
+                    actions[i].setText(text)
+                    actions[i].setData(repositories[i])
+                    actions[i].setVisible(True)
+                    actions[i].setStatusTip(repositories[i])
+            else:
+                for actions in update_list:
+                    actions[i].setVisible(False)
+
+        if len_repositories > 0:
+            self.recent_repository_separator.setVisible(True)
+            self.compare_recent_repository_separator.setVisible(True)
+
+    def on_open_recent_files(self, index, mode):
+        print('index', index)
+
+        if mode & (BASE_FILE | COMP_FILE):
+            file_list = 'recent_file_list'
+        elif mode & (BASE_REPO | COMP_REPO):
+            file_list = 'recent_repository_list'
+        else:
+            return
+
+        settings = QSettings(COMPANY, APPLICATION_NAME)
+        files = settings.value(file_list, type=list)
+
+        if len(files):
+            file = files[index]
+            print(file)
+            self.load_model(file, mode)
+
+    def load_model(self, file, mode):
+        if mode & (BASE_FILE | COMP_FILE):
+            if path.isfile(file):
+                self.load_model_from_file(file, mode)
+        elif mode & (BASE_REPO | COMP_REPO):
+            if path.isdir(file):
+                self.load_model_from_repository(file, mode)
+
+    def on_about_vql_manager(self):
+        QMessageBox.about(self, 'About ' + self.windowTitle(), about_text)
+
+    def on_about_qt(self):
+        QMessageBox.aboutQt(self, self.windowTitle())
 
     @staticmethod
     def get_buttons_widget(main_widget, button_list):
@@ -398,27 +573,33 @@ class VQLManagerWindow(QMainWindow):
                 if new_mode & BASE_FILE:
                     file = self.ask_file_open()
                     if file:
+                        QApplication.setOverrideCursor(Qt.WaitCursor)
                         if self.load_model_from_file(file, BASE_FILE):
                             self.base_repository_file = file
                             new_mode |= BASE_LOADED
                             self.switch_to_mode(new_mode)
                             self.update_tree_widgets()
                             self.working_folder = path.dirname(file)
+                            self.add_to_recent_files(file)
                         else:
                             return
+                        QApplication.restoreOverrideCursor()
                     else:
                         return
                 elif new_mode & BASE_REPO:
                     folder = self.ask_repository_open()
                     if folder:
+                        QApplication.setOverrideCursor(Qt.WaitCursor)
                         if self.load_model_from_repository(folder, BASE_REPO):
                             self.base_repository_folder = folder
                             new_mode |= BASE_LOADED
                             self.switch_to_mode(new_mode)
                             self.update_tree_widgets()
                             self.working_folder = folder
+                            self.add_to_recent_files(folder)
                         else:
                             return
+                        QApplication.restoreOverrideCursor()
                     else:
                         return
 
@@ -434,27 +615,33 @@ class VQLManagerWindow(QMainWindow):
                     if new_mode & COMP_FILE:
                         file = self.ask_file_open()
                         if file:
+                            QApplication.setOverrideCursor(Qt.WaitCursor)
                             if self.load_model_from_file(file, COMP_FILE):
                                 self.compare_repository_file = file
                                 current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
                                 new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_FILE
                                 self.switch_to_mode(new_mode)
                                 self.update_tree_widgets()
+                                self.add_to_recent_files(file)
                             else:
                                 return
+                            QApplication.restoreOverrideCursor()
                         else:
                             return
                     elif new_mode & COMP_REPO:
                         folder = self.ask_repository_open()
                         if folder:
+                            QApplication.setOverrideCursor(Qt.WaitCursor)
                             if self.load_model_from_repository(folder, COMP_REPO):
                                 self.compare_repository_folder = folder
                                 current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
                                 new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_REPO
                                 self.switch_to_mode(new_mode)
                                 self.update_tree_widgets()
+                                self.add_to_recent_files(folder)
                             else:
                                 return
+                            QApplication.restoreOverrideCursor()
                         else:
                             return
             else:
@@ -554,7 +741,29 @@ class VQLManagerWindow(QMainWindow):
                     set_title("Differences : " + object_name)
             put_text(html_code)
 
-    def format_source_code(self, object_name, raw_code, code_type):
+    def add_to_recent_files(self, file):
+        settings = QSettings(COMPANY, APPLICATION_NAME)
+        if path.isfile(file):
+            settings_list = 'recent_file_list'
+        elif path.isdir(file):
+            settings_list = 'recent_repository_list'
+        else:
+            return
+
+        files = settings.value(settings_list, type=list)
+        if file in files:
+            files.remove(file)
+        files = [file] + files
+        if len(files) > self.max_recent_files:
+            files = files[:self.max_recent_files]
+        settings.setValue(settings_list, files)
+        self.update_recent_file_actions()
+
+    @staticmethod
+    def format_source_code(object_name, raw_code, code_type):
+        if not raw_code:
+            return ''
+
         html = ''
         if code_type & (ORIGINAL_CODE | COMPARE_CODE):
             code = raw_code.replace('\n', '<br />')
@@ -570,7 +779,7 @@ class VQLManagerWindow(QMainWindow):
             # print(html)
 
         elif code_type & DIFF_CODE:
-            code = raw_code
+            return raw_code
 
         return html
 

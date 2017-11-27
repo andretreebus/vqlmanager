@@ -16,6 +16,9 @@ from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
 
 
+COMPANY = 'www.erasmusmc.nl'
+APPLICATION_NAME = 'VQL Manager'
+
 # class VqlConstants(QObject):
 # convenience names for class constants
 # checkbox option in the tree widgets
@@ -208,3 +211,13 @@ def doc_template(object_name, body):
 '''
     return doc
 
+
+about_text = '''
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
+sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris 
+nisi ut aliquip ex ea commodo consequat. 
+Duis aute irure dolor in reprehenderit in voluptate velit
+esse cillum dolore eu fugiat nulla pariatur. 
+Excepteur sint occaecat cupidatat non proident, 
+sunt in culpa qui officia deserunt mollit anim id est laborum'''

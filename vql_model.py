@@ -15,9 +15,9 @@ Last edited: November 2017
 """
 
 from vql_manager_core import *
-from PyQt5.QtCore import Qt, QBuffer, QIODevice, QSize
+from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem, QAbstractItemView
+from PyQt5.QtWidgets import QWidget, QTreeWidget, QAbstractItemView, QTreeWidgetItem
 from chapter import Chapter
 from code_item import CodeItem
 from collections import OrderedDict
@@ -46,18 +46,6 @@ class VqlModel(QTreeWidget):
         # custom class variables #########################
         # root is the first/parent node for all QTreeWidgetItem children
         self.root = self.invisibleRootItem()
-        self.root.setFlags(ITEM_FLAG_CHAPTER)
-
-        self.invisibleRootItem().setFlags(ITEM_FLAG_ALL)
-        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.setSelectionMode(QAbstractItemView.NoSelection)
-        # self.setIconSize(QSize(16, 16))
-        self.setUniformRowHeights(True)
-        self.setHeaderLabel('No file selected')
-        # self.setToolTip("Select code parts: Right mouse click")
-        # self.setToolTipDuration(2000)
-        # self.setIconSize(QSize(16, 16))
-        self.setColumnCount(1)
 
         # chapters are stored in a list of Chapters inherited from QTreeWidgetItem
         self.chapters = list()
@@ -244,35 +232,15 @@ class VqlModel(QTreeWidget):
                                                            compare_code=code, preceding=index_child))
                         index += 1
 
-    def tree_reset(self):
-        """
-        Function resets the whole model
-        :return: nothing
-        """
-
+        # formatting the tree items
+        for _, code_item in self.get_code_items():
+            if code_item.color == RED:
+                code_item.setCheckState(0, UNCHECKED)
         for chapter in self.chapters:
-            chapter.tree_reset()
-
-        self.chapters = list()
-        # root is the first/parent node for all QTreeWidgetItem children
-        self.root = self.invisibleRootItem()
-        self.clear()
-        # initialize by adding empty chapters
-        self._add_chapters(CHAPTER_NAMES)
-
-        # base_folder for storing as a repository
-        # self.set_base_folder('')
-        self.changed = False
-
-        # self.setHeaderLabel('Selection')
-
-    def tree_reset_compare(self):
-        """
-        Reset of compare tree items
-        :return:
-        """
-        for chapter in self.chapters:
-            chapter.set_gui(GUI_SELECT)
+            chapter.set_gui(gui)
+            chapter.set_color_based_on_children(gui)
+            if chapter.childCount() == 0:
+                chapter.setCheckState(0, UNCHECKED)
 
     def change_view(self, new_view, mode):
         gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)
@@ -303,6 +271,7 @@ class VqlModel(QTreeWidget):
     def build_denodo_view(self, gui):
         folders = OrderedDict()
         self.pack()
+        # get the list of folders and all code items in them
         for chapter, code_item in self.get_code_items():
             if code_item.denodo_folder not in folders.keys():
                 folders[code_item.denodo_folder] = list()
@@ -310,7 +279,11 @@ class VqlModel(QTreeWidget):
             else:
                 folders[code_item.denodo_folder].append(code_item)
 
-        print(folders.keys())
+        # Todo: if the folders contain paths that have no parents yet an error occurs
+        # Todo: example: /source/presentatie_laag/vma
+        # Todo: without the vql file mentioning /source, /source/presentatie_laag
+
+        # print(folders.keys())
         temp_widget = VqlModel(None)
         temp_root = temp_widget.denodo_root
 

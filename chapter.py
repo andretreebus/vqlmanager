@@ -191,17 +191,6 @@ class Chapter(QTreeWidgetItem):
     def get_file_path(self, folder):
         return path.normpath(path.join(folder, self.name.replace(' ', '_')))
 
-    def tree_reset(self):
-        """
-        Function for deleting/resetting this chapter
-        :return: nothing
-        """
-        for code_item in self.code_items:
-            code_item.tree_reset()
-
-        self.code_items = list()
-        _ = self.takeChildren()
-
     # export functions
     # to file
     def get_code_as_file(self, selected):

@@ -175,18 +175,6 @@ class CodeItem(QTreeWidgetItem):
         else:
             return False
 
-    def tree_reset(self):
-        """
-        Function for deleting/resetting this item
-        :return: nothing
-        """
-        self.object_name = ''
-        self.setText(0, '')
-        self.code = ''
-        self.compare_code = ''
-        self.setData(0, Qt.UserRole, '')
-        self.diff_engine = None
-
     def set_color(self, color):
         """
         Set the color
