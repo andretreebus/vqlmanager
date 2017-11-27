@@ -48,7 +48,7 @@ class Chapter(QTreeWidgetItem):
         self.user_data = dict()
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
-        # self.setFlags(ITEM_FLAG_ALL)
+        self.setFlags(ITEM_FLAG_CHAPTER)
         self.class_type = Chapter
         self.name = name
         self.setText(0, name)
@@ -170,10 +170,12 @@ class Chapter(QTreeWidgetItem):
         self.setForeground(0, color)
 
     def get_code_item_by_object_name(self, object_name):
-        for index, code_item in enumerate(self.code_items):
-            if code_item.object_name == object_name:
-                return index, code_item
-        return None, None
+        if object_name:
+            for index, code_item in enumerate(self.code_items):
+                if code_item:
+                    if code_item.object_name == object_name:
+                        return index, code_item
+        return 0, None
 
     def is_selected(self):
         """

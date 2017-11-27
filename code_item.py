@@ -37,7 +37,7 @@ class CodeItem(QTreeWidgetItem):
 
     diff_engine = Differ()
 
-    def __init__(self, parent, chapter_name, mode, code=None, compare_code=None):
+    def __init__(self, parent, chapter_name, mode, code=None, compare_code=None, preceding=None):
         """
         CodeItem Class
         :param parent:
@@ -45,11 +45,14 @@ class CodeItem(QTreeWidgetItem):
         :param code: the code related to this denodo object
         """
 
-        super(CodeItem, self).__init__(parent)
+        if preceding:
+            super(CodeItem, self).__init__(parent, preceding, 0)
+        else:
+            super(CodeItem, self).__init__(parent)
         self.user_data = dict()
         self.setCheckState(0, CHECKED)
         self.childIndicatorPolicy = 2
-        # self.setFlags(ITEM_FLAG_ALL)  # from parent
+        self.setFlags(ITEM_FLAG_CODE_ITEM)  # from parent
         self.class_type = CodeItem
         self.chapter_name = chapter_name
         self.mode = mode
@@ -77,10 +80,9 @@ class CodeItem(QTreeWidgetItem):
         self.pack(None)
 
     def set_compare_code(self, compare_code, mode):
-        if compare_code:
-            self.mode |= mode
-            self.compare_code = compare_code
-            self.compare()
+        self.mode |= mode
+        self.compare_code = compare_code
+        self.compare()
 
     def compare(self):
         if self.code:
@@ -256,7 +258,7 @@ class CodeItem(QTreeWidgetItem):
         elif chapter_name == 'DATABASE':
             object_name = first_line.split()[4]
         elif chapter_name == 'FOLDERS':
-            object_name = first_line[27:-3].replace(' ', '_').replace('/', '_')
+            object_name = first_line[27:-3]
         elif chapter_name == 'LISTENERS JMS':
             pass  # Todo: we don't use these kind of objects in Denodo
         elif chapter_name == 'DATASOURCES':

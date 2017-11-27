@@ -40,8 +40,11 @@ YELLOW = QBrush(QColor(yellow))
 WHITE = QBrush(QColor(white))
 
 # item flags for the all_chapters and selection tree widget items
-ITEM_FLAG_ALL = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
+ITEM_FLAG_ALL = Qt.ItemIsEnabled
+ITEM_FLAG_CHAPTER = Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
+ITEM_FLAG_CODE_ITEM = Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
 ITEM_FLAG_SEL = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+
 
 # main chapter names as used in Denodo code
 CHAPTER_NAMES = ['I18N MAPS', 'DATABASE', 'FOLDERS', 'LISTENERS JMS', 'DATASOURCES', 'WRAPPERS',

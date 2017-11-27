@@ -15,12 +15,12 @@ Last edited: November 2017
 """
 
 from vql_manager_core import *
-from PyQt5.QtCore import Qt, QBuffer, QIODevice
+from PyQt5.QtCore import Qt, QBuffer, QIODevice, QSize
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget
+from PyQt5.QtWidgets import QWidget, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from chapter import Chapter
 from code_item import CodeItem
-from _collections import OrderedDict
+from collections import OrderedDict
 
 
 class VqlModel(QTreeWidget):
@@ -46,6 +46,18 @@ class VqlModel(QTreeWidget):
         # custom class variables #########################
         # root is the first/parent node for all QTreeWidgetItem children
         self.root = self.invisibleRootItem()
+        self.root.setFlags(ITEM_FLAG_CHAPTER)
+
+        self.invisibleRootItem().setFlags(ITEM_FLAG_ALL)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setSelectionMode(QAbstractItemView.NoSelection)
+        # self.setIconSize(QSize(16, 16))
+        self.setUniformRowHeights(True)
+        self.setHeaderLabel('No file selected')
+        # self.setToolTip("Select code parts: Right mouse click")
+        # self.setToolTipDuration(2000)
+        # self.setIconSize(QSize(16, 16))
+        self.setColumnCount(1)
 
         # chapters are stored in a list of Chapters inherited from QTreeWidgetItem
         self.chapters = list()
@@ -173,39 +185,64 @@ class VqlModel(QTreeWidget):
         """
 
         self.changed = False
-        indices = [[chapter.name, file_content.find(chapter.header)] for chapter in self.chapters]
-        indices.append(['', len(file_content)])
-        chapter_parts = [[start[0], file_content[start[1]:end[1]]]  # extract chapter_name and the content code
-                         for start, end in zip(indices[:-1], indices[1:])  # loop over the indices, and those shifted
-                         if start[1] > 0]  # if found
+        gui = GUI_NONE
 
-        for chapter_name, chapter_part in chapter_parts:
-            chapter = self.get_chapter_by_name(chapter_name)
-            if chapter:
-                object_codes = (DELIMITER + code for code in chapter_part.split(DELIMITER)[1:])
+        if mode & (BASE_FILE | BASE_REPO):
+            gui = GUI_SELECT
+        elif mode & (COMP_FILE | COMP_REPO):
+            gui = GUI_COMPARE
+            # set all items to red, indicating they are lost.. this will later change if not
+            for _, code_item in self.get_code_items():
+                code_item.set_compare_code('', mode)
 
-                if mode & (BASE_FILE | BASE_REPO):
-                    chapter.code_items = [CodeItem(chapter, chapter.name, mode, code=code)
-                                          for code in object_codes]
+        # remove possible crab above first chapter
+        for chapter in self.chapters:
+            start_index = file_content.find(chapter.header)
+            if not start_index == -1:
+                file_content = file_content[start_index:]
+                break
 
-                if mode & (COMP_FILE | COMP_REPO):
-                    new_objects = ((CodeItem.extract_object_name_from_code(chapter.name, code), code)
-                                   for code in object_codes)
-                    index = 0
-                    for new_object_name, code in new_objects:
-                        i, code_item = chapter.get_code_item_by_object_name(new_object_name)
-                        if code_item:
-                            code_item.set_compare_code(code, mode)
-                            index = i
-                        else:
-                            index += 1
-                            code_item = CodeItem(chapter, chapter.name, mode, compare_code=code)
-                            chapter.code_items.insert(index, code_item)
-            if mode & (BASE_FILE | BASE_REPO):
-                chapter.set_color_based_on_children(GUI_SELECT)
-            elif mode & (COMP_FILE | COMP_REPO):
-                chapter.set_color_based_on_children(GUI_COMPARE)
-                chapter.pack(self.color_filter)
+        # construct a list with indices where chapters start
+        indices = list()
+        for chapter in self.chapters:
+            start_string_index = file_content.find(chapter.header)
+            if start_string_index == -1:
+                continue
+            indices.append((chapter, start_string_index))
+        indices.append(('', len(file_content)))
+
+        # extract data from the file
+        # zip the indices shifted one item to get start and end of the chapter code
+        for start_tuple, end_tuple in zip(indices[:-1], indices[1:]):
+            index = 0
+            chapter, start = start_tuple
+            next_chapter, end = end_tuple
+            if start == -1:
+                continue
+            chapter_part = file_content[start:end]   # << contains chapter code
+            chapter_objects = chapter_part.split(DELIMITER)[1:]  # split on CREATE OR REPLACE
+            for chapter_object in chapter_objects:
+                code = DELIMITER + chapter_object  # << put back the delimiter
+                object_name = CodeItem.extract_object_name_from_code(chapter.name, code)  # extract object name
+                if not object_name:
+                    continue
+                if gui == GUI_SELECT:
+                    # add the code item to the chapter
+                    chapter.code_items.append(CodeItem(chapter, chapter.name, mode, code=code))
+
+                elif mode & (COMP_FILE | COMP_REPO):   # COMPARE case
+                    # Check if item exists, and where
+                    i, existing_item = chapter.get_code_item_by_object_name(object_name)
+                    if existing_item:
+                        existing_item.set_compare_code(code, mode)  # set the new mode en code
+                        index = i
+                    else:  # code object does not yet exist
+                        index_child = chapter.child(index)
+                        # add the new object under the indexed child
+                        chapter.code_items.insert(index,
+                                                  CodeItem(chapter, chapter.name, mode,
+                                                           compare_code=code, preceding=index_child))
+                        index += 1
 
     def tree_reset(self):
         """
@@ -273,7 +310,7 @@ class VqlModel(QTreeWidget):
             else:
                 folders[code_item.denodo_folder].append(code_item)
 
-        # print(folders.keys())
+        print(folders.keys())
         temp_widget = VqlModel(None)
         temp_root = temp_widget.denodo_root
 
@@ -301,8 +338,6 @@ class VqlModel(QTreeWidget):
 
                 folder_item.code_items.append(item)
 
-                # item.set_compare_code(code_item.compare_code, code_item.mode)
-                # item.gui = code_item.gui
                 item.setCheckState(0, code_item.checkState(0))
             folder_item.set_gui(gui)
             folder_item.set_color_based_on_children(gui)

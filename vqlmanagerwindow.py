@@ -14,11 +14,12 @@ Last edited: November 2017
 """
 
 from os import path, makedirs, listdir, unlink, rmdir
+import subprocess, sys
 from vql_manager_core import *
 
-from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant
+from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QCoreApplication
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
@@ -46,7 +47,7 @@ class VQLManagerWindow(QMainWindow):
         select_button_labels = [('All', white), ('Lost', red), ('New', green), ('Same', white), ('Changed', yellow)]
         diff_button_labels = [('Original', white), ('New', green), ('Changes', yellow)]
 
-        # instanciate widgets
+        # instantiate widgets
         self.mainwidget = QWidget(self, flags=Qt.Widget)
         self.layout = QGridLayout(self.mainwidget)
 
@@ -98,7 +99,7 @@ class VQLManagerWindow(QMainWindow):
         # Format and setup all widgets
         self.setup_ui()
 
-        # CallbacksL Slots and Signals ###########################################################################
+        # Callbacks Slots and Signals ###########################################################################
         self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
         self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
 
@@ -119,11 +120,6 @@ class VQLManagerWindow(QMainWindow):
         self.switch_to_mode(GUI_NONE)
         self.code_show_selector = ORIGINAL_CODE
         self.code_text_edit_cache = None
-        # # self.switch_to_mode(GUI_SELECT | BASE_FILE)
-        # file = '/home/andre/PycharmProjects/vql/data/db.vql'
-        # if self.load_model_from_file(file, BASE_FILE):
-        #     self.base_repository_file = file
-        #     self.switch_to_mode(GUI_SELECT | BASE_FILE | BASE_LOADED)
 
     def setup_ui(self):
         """
@@ -137,26 +133,15 @@ class VQLManagerWindow(QMainWindow):
 
         self.resize(1200, 800)
         self.setMinimumSize(QSize(860, 440))
-        # self.setMaximumSize(QSize(1920, 1080))
         self.setIconSize(QSize(32, 32))
         self.setWindowIcon(QIcon(self._root + '/images/splitter.png'))
         self.setWindowTitle("VQL Manager")
-        # self.setWindowFlags(Qt.WindowMaximizeButtonHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint)
-        # initialize mainwidget and layout
+
         self.layout.setContentsMargins(23, 23, 23, 23)
         self.layout.setSpacing(8)
 
         # Add Widgets ####################################################################################
-        self.all_chapters_treeview.invisibleRootItem().setFlags(ITEM_FLAG_ALL)
-        self.all_chapters_treeview.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.all_chapters_treeview.setSelectionMode(QAbstractItemView.NoSelection)
-        # self.all_chapters_treeview.setIconSize(QSize(16, 16))
-        self.all_chapters_treeview.setUniformRowHeights(True)
-        self.all_chapters_treeview.setHeaderLabel('No file selected')
-        # self.all_chapters_treeview.setToolTip("Select code parts: Right mouse click")
-        # self.all_chapters_treeview.setToolTipDuration(2000)
-        self.all_chapters_treeview.setIconSize(QSize(16, 16))
-        self.all_chapters_treeview.setColumnCount(1)
+
         set_size(self.all_chapters_treeview)
 
         self.selected_treeview.invisibleRootItem().setFlags(ITEM_FLAG_SEL)
@@ -501,18 +486,14 @@ class VQLManagerWindow(QMainWindow):
         Event handler to reset the model
         :return: nothing
         """
-
-        if reset_mode & GUI_NONE:
-            self.all_chapters_treeview.tree_reset()
-            self.all_chapters_treeview.tree_reset_compare()
-        elif reset_mode & GUI_SELECT:
-            self.all_chapters_treeview.tree_reset()
-        elif reset_mode & GUI_COMPARE:
-            self.all_chapters_treeview.tree_reset_compare()
-        self.update_tree_widgets()
-        self.code_text_edit.setText('')
-        self.code_text_edit_label.setText('Command: ')
-        self.switch_to_mode(GUI_NONE | VQL_VIEW)
+        app_path = path.normpath(self._root + '/vql_manager.py')
+        try:
+            subprocess.Popen([sys.executable, app_path])
+        except OSError as exception:
+            print('ERROR: could not restart application:')
+            print('  %s' % str(exception))
+        else:
+            qApp.quit()
 
     def on_selection_changed(self, item, *_):
         """
@@ -566,14 +547,14 @@ class VQLManagerWindow(QMainWindow):
                     html_code = self.format_source_code(object_name, item_data['code'], selector)
                     set_title("Original Code: " + object_name)
                 elif selector & COMPARE_CODE:
-                    html_code = self.format_source_code(object_name, item_data['compare_code'],selector)
+                    html_code = self.format_source_code(object_name, item_data['compare_code'], selector)
                     set_title("New Code: " + object_name)
                 elif selector & DIFF_CODE:
                     html_code = self.format_source_code(object_name, item_data['difference'], selector)
                     set_title("Differences : " + object_name)
             put_text(html_code)
 
-    def format_source_code(self, object_name , raw_code, code_type):
+    def format_source_code(self, object_name, raw_code, code_type):
         html = ''
         if code_type & (ORIGINAL_CODE | COMPARE_CODE):
             code = raw_code.replace('\n', '<br />')
