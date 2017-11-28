@@ -194,9 +194,13 @@ def get_reserved_words():
 
 
 RESERVED_WORDS = get_reserved_words()
-
+RECENT_FILES = 'recent_file_list'
+RECENT_REPOSITORIES = 'recent_repositories_list'
+MAX_RECENT_FILES = 8
 
 # <link rel="stylesheet" type="text/css" href="mystyle.css">
+
+
 def doc_template(object_name, body):
     doc = '''
 <!DOCTYPE html>

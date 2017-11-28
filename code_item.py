@@ -185,6 +185,22 @@ class CodeItem(QTreeWidgetItem):
         self.color = color
         self.setForeground(0, color)
 
+    def remove_compare(self):
+        if self.compare_code:
+            if not self.code:
+                self.suicide()
+        if self.code:
+            self.set_color(WHITE)
+            self.gui = GUI_SELECT
+            if self.compare_code:
+                self.compare_code = None
+                self.difference = ''
+                self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.code)
+                if self.mode & COMP_FILE:
+                    self.mode = self.mode - COMP_FILE
+                if self.mode & COMP_REPO:
+                    self.mode = self.mode - COMP_REPO
+
     @staticmethod
     def extract_denodo_folder_name_from_code(chapter_name, code):
         folder_path = ''

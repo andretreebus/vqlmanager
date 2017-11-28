@@ -17,15 +17,16 @@ from os import path, makedirs, listdir, unlink, rmdir
 import subprocess
 import sys
 from vql_manager_core import *
-
+import asyncio
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vql_model import VqlModel
 from code_item import CodeItem
+from functools import partial
 
 
 class VQLManagerWindow(QMainWindow):
@@ -48,8 +49,8 @@ class VQLManagerWindow(QMainWindow):
         self._root = QFileInfo(__file__).absolutePath()
         images = self._root + '/images/'
 
-        settings = QSettings(COMPANY, APPLICATION_NAME)  # Todo: remove these in production
-        settings.clear()
+        # settings = QSettings(COMPANY, APPLICATION_NAME)
+        # settings.clear()
 
         self.resize(1200, 800)
         self.setMinimumSize(QSize(860, 440))
@@ -68,7 +69,7 @@ class VQLManagerWindow(QMainWindow):
         self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, select_button_labels)
         self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_labels)
 
-        #create tree widgets VqlModel(self.mainwidget)
+        # create tree widgets VqlModel(self.mainwidget)
         self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
                                                              header='Selection Pane',
                                                              tooltip="")
@@ -77,14 +78,14 @@ class VQLManagerWindow(QMainWindow):
                                                          header='View Pane',
                                                          tooltip="Selected parts: Click to view source code")
 
-        #create labels
+        # create labels
         self.code_text_edit_label = QLabel(self.mainwidget)
         self.mode_label = QLabel(self.mainwidget)
         self.base_repository_label = QLabel(self.mainwidget)
         self.compare_repository_label = QLabel(self.mainwidget)
         self.selection_viewer_label = QLabel(self.mainwidget)
 
-        #create source code view
+        # create source code view
         self.code_text_edit = QTextEdit(self.mainwidget)
 
         # create statusbar
@@ -98,36 +99,28 @@ class VQLManagerWindow(QMainWindow):
         self.exit_action = QAction(QIcon(images + 'exit.png'), '&Exit', self)
 
         # Create recent file menu
-        self.max_recent_files = 8
         self.recent_file_actions = list()
         self.recent_repository_actions = list()
         self.compare_recent_file_actions = list()
         self.compare_recent_repository_actions = list()
 
-        for i in range(self.max_recent_files):
+        for i in range(MAX_RECENT_FILES):
             action = QAction(self)
             action.setVisible(False)
-            action.triggered.connect(lambda: self.on_open_recent_files(i, BASE_FILE))
+            action.triggered.connect(partial(self.on_open_recent_files, i, GUI_SELECT | BASE_FILE))
             self.recent_file_actions.append(action)
-
-        for i in range(self.max_recent_files):
             action = QAction(self)
             action.setVisible(False)
-            action.triggered.connect(lambda: self.on_open_recent_files(i, BASE_REPO))
+            action.triggered.connect(partial(self.on_open_recent_files, i, GUI_SELECT | BASE_REPO))
             self.recent_repository_actions.append(action)
-
-        for i in range(self.max_recent_files):
             action = QAction(self)
             action.setVisible(False)
-            action.triggered.connect(lambda: self.on_open_recent_files(i, COMP_FILE))
+            action.triggered.connect(partial(self.on_open_recent_files, i, GUI_COMPARE | COMP_FILE))
             self.compare_recent_file_actions.append(action)
-
-        for i in range(self.max_recent_files):
             action = QAction(self)
             action.setVisible(False)
-            action.triggered.connect(lambda: self.on_open_recent_files(i, COMP_REPO))
+            action.triggered.connect(partial(self.on_open_recent_files, i, GUI_COMPARE | COMP_REPO))
             self.compare_recent_repository_actions.append(action)
-
 
         # create compare with File menu
         self.open_compare_file_action = QAction(QIcon(images + 'open_file.png'), '&Open File to Compare', self)
@@ -140,23 +133,23 @@ class VQLManagerWindow(QMainWindow):
         self.about_action = QAction("&About", self)
         self.about_qt_action = QAction("About &Qt", self)
 
-        #  Menu
+        # Menu
         self.menubar = QMenuBar(self)
-        self.filemenu = None
+        self.filemenu = QMenu()
         self.recent_file_separator = None
-        self.recent_file_menu = None
+        self.recent_file_menu = QMenu()
         self.recent_repository_separator = None
-        self.recent_repository_menu = None
+        self.recent_repository_menu = QMenu()
 
-        self.compare_menu = None
-        self.compare_recent_file_menu = None
-        self.compare_recent_repository_menu = None
+        self.compare_menu = QMenu()
+        self.compare_recent_file_menu = QMenu()
+        self.compare_recent_repository_menu = QMenu()
         self.compare_recent_repository_separator = None
-        self.compare_recent_file_separator = None
+        self.compare_recent_file_separator = QMenu()
 
-        self.help_menu = None
+        self.help_menu = QMenu()
 
-        self.options_menu = None
+        self.options_menu = QMenu()
         self.update_timer = QTimer()
 
         # Format and setup all widgets
@@ -189,17 +182,33 @@ class VQLManagerWindow(QMainWindow):
         tree_widget.setColumnCount(1)
         return tree_widget
 
-    def new_tree_data(self):
+    def new_tree_data(self, mode):
         # create tree widgets VqlModel(self.mainwidget)
-        self.all_chapters_treeview.clear()
-        self.selected_treeview.clear()
-        self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
-                                                             header='Selection Pane',
-                                                             tooltip="")
+        new_mode = GUI_NONE
+        if mode & GUI_NONE:
+            self.all_chapters_treeview.clear()
+            self.selected_treeview.clear()
+            self.all_chapters_treeview = self.create_tree_widget(
+                self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER, header='Selection Pane', tooltip="")
 
-        self.selected_treeview = self.create_tree_widget(self.mainwidget, QTreeWidget, ITEM_FLAG_SEL,
-                                                         header='View Pane',
-                                                         tooltip="Selected parts: Click to view source code")
+            self.selected_treeview = self.create_tree_widget(
+                self.mainwidget, QTreeWidget, ITEM_FLAG_SEL, header='View Pane',
+                tooltip="Selected parts: Click to view source code")
+            new_mode = GUI_NONE
+
+        elif mode & GUI_SELECT:
+            self.all_chapters_treeview.remove_compare()
+            strip_list = [GUI_COMPARE, COMP_REPO, COMP_FILE, COMP_LOADED]
+            new_mode = self.mode_strip(self.get_mode(), strip_list)
+        return new_mode
+
+    @staticmethod
+    def mode_strip(mode, strip_list):
+        for constant in strip_list:
+            if mode & constant:
+                mode -= constant
+        return mode
+
     @staticmethod
     def resize_widget(some_widget):
         some_widget.setMinimumSize(QSize(PANE_WIDTH, 0))
@@ -310,15 +319,13 @@ class VQLManagerWindow(QMainWindow):
         self.denodo_folder_structure_action.triggered.connect(self.on_switch_view)
 
         # Reset everything
-        # self.reset_action.setShortcut('Ctrl+E')
         self.reset_action.setStatusTip('Reset the application to a clean state')
-        self.reset_action.triggered.connect(lambda: self.on_reset(GUI_NONE))
+        self.reset_action.triggered.connect(lambda: self.on_reset())
 
         self.about_action.setStatusTip("Show the application's About box")
         self.about_action.triggered.connect(self.on_about_vql_manager)
         self.about_qt_action.setStatusTip("Show the Qt library's About box")
         self.about_qt_action.triggered.connect(self.on_about_qt)
-
 
         #  Menu
         self.menubar.setGeometry(QRect(0, 0, 1200, 23))
@@ -331,12 +338,12 @@ class VQLManagerWindow(QMainWindow):
 
         self.recent_file_separator = self.filemenu.addSeparator()
         self.recent_file_menu = self.filemenu.addMenu('Recent Files')
-        for i in range(self.max_recent_files):
+        for i in range(MAX_RECENT_FILES):
             self.recent_file_menu.addAction(self.recent_file_actions[i])
 
         self.recent_repository_separator = self.filemenu.addSeparator()
         self.recent_repository_menu = self.filemenu.addMenu('Recent Repositories')
-        for i in range(self.max_recent_files):
+        for i in range(MAX_RECENT_FILES):
             self.recent_repository_menu.addAction(self.recent_repository_actions[i])
 
         self.filemenu.addSeparator()
@@ -348,13 +355,15 @@ class VQLManagerWindow(QMainWindow):
 
         self.compare_recent_file_separator = self.compare_menu.addSeparator()
         self.compare_recent_file_menu = self.compare_menu.addMenu('Recent Files')
-        for i in range(self.max_recent_files):
-            self.compare_recent_file_menu.addAction(self.recent_file_actions[i])
+        for i in range(MAX_RECENT_FILES):
+            self.compare_recent_file_menu.addAction(self.compare_recent_file_actions[i])
 
         self.compare_recent_repository_separator = self.compare_menu.addSeparator()
         self.compare_recent_repository_menu = self.compare_menu.addMenu('Recent Repositories')
-        for i in range(self.max_recent_files):
-            self.compare_recent_file_menu.addAction(self.recent_repository_actions[i])
+        for i in range(MAX_RECENT_FILES):
+            self.compare_recent_repository_menu.addAction(self.compare_recent_repository_actions[i])
+
+        self.update_recent_file_actions()
 
         self.options_menu = self.menubar.addMenu('&Options')
         self.options_menu.addAction(self.denodo_folder_structure_action)
@@ -365,9 +374,7 @@ class VQLManagerWindow(QMainWindow):
         self.help_menu.addAction(self.about_action)
         self.help_menu.addAction(self.about_qt_action)
 
-        self.update_recent_file_actions()
-
-        # Callbacks Slots and Signals ###########################################################################
+        # Callbacks Slots and Signals #####################################################
         self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
         self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
 
@@ -379,79 +386,50 @@ class VQLManagerWindow(QMainWindow):
         self.update_timer.timeout.connect(self.update_tree_widgets)
 
     def update_recent_file_actions(self):
-
         settings = QSettings(COMPANY, APPLICATION_NAME)
-        files = settings.value('recent_file_list', type=list)
-        repositories = settings.value('recent_repositories_list', type=list)
+        files = settings.value(RECENT_FILES, type=list)
+        repositories = settings.value(RECENT_REPOSITORIES, type=list)
 
         len_files = len(files)
         len_repositories = len(repositories)
-        update_list = [self.recent_file_actions, self.compare_recent_file_actions]
 
-        for i in range(self.max_recent_files):
-            if i < len_files:
-                text = str(i) + ' ' + path.basename(files[i])
-                for actions in update_list:
+        menus = [self.recent_file_actions, self.compare_recent_file_actions]
+        for actions in menus:
+            for i in range(MAX_RECENT_FILES):
+                if i < len_files:
+                    text = str(i + 1) + ': ' + path.basename(files[i])
                     actions[i].setText(text)
                     actions[i].setData(files[i])
                     actions[i].setVisible(True)
                     actions[i].setStatusTip(files[i])
-            else:
-                for actions in update_list:
+                else:
                     actions[i].setVisible(False)
-        if len_files > 0:
-            self.recent_file_separator.setVisible(True)
-            self.compare_recent_file_separator.setVisible(True)
 
-        update_list = [self.recent_repository_actions, self.compare_recent_repository_actions]
-
-        for i in range(self.max_recent_files):
-            if i < len_repositories:
-                text = str(i) + ' ' + path.basename(path.normpath(repositories[i]))
-                for actions in update_list:
+        menus = [self.recent_repository_actions, self.compare_recent_repository_actions]
+        for actions in menus:
+            for i in range(MAX_RECENT_FILES):
+                if i < len_repositories:
+                    text = str(i + 1) + ': ' + path.basename(path.normpath(repositories[i]))
                     actions[i].setText(text)
                     actions[i].setData(repositories[i])
                     actions[i].setVisible(True)
                     actions[i].setStatusTip(repositories[i])
-            else:
-                for actions in update_list:
+                else:
                     actions[i].setVisible(False)
+
+        if len_files > 0:
+            self.recent_file_separator.setVisible(True)
+            self.compare_recent_file_separator.setVisible(True)
+        else:
+            self.recent_file_separator.setVisible(False)
+            self.compare_recent_file_separator.setVisible(False)
 
         if len_repositories > 0:
             self.recent_repository_separator.setVisible(True)
             self.compare_recent_repository_separator.setVisible(True)
-
-    def on_open_recent_files(self, index, mode):
-        print('index', index)
-
-        if mode & (BASE_FILE | COMP_FILE):
-            file_list = 'recent_file_list'
-        elif mode & (BASE_REPO | COMP_REPO):
-            file_list = 'recent_repository_list'
         else:
-            return
-
-        settings = QSettings(COMPANY, APPLICATION_NAME)
-        files = settings.value(file_list, type=list)
-
-        if len(files):
-            file = files[index]
-            print(file)
-            self.load_model(file, mode)
-
-    def load_model(self, file, mode):
-        if mode & (BASE_FILE | COMP_FILE):
-            if path.isfile(file):
-                self.load_model_from_file(file, mode)
-        elif mode & (BASE_REPO | COMP_REPO):
-            if path.isdir(file):
-                self.load_model_from_repository(file, mode)
-
-    def on_about_vql_manager(self):
-        QMessageBox.about(self, 'About ' + self.windowTitle(), about_text)
-
-    def on_about_qt(self):
-        QMessageBox.aboutQt(self, self.windowTitle())
+            self.recent_repository_separator.setVisible(False)
+            self.compare_recent_repository_separator.setVisible(False)
 
     @staticmethod
     def get_buttons_widget(main_widget, button_list):
@@ -513,6 +491,22 @@ class VQLManagerWindow(QMainWindow):
 
     # Event handlers for opening and saving models
 
+    def on_open_recent_files(self, index, mode):
+        if mode & (BASE_FILE | COMP_FILE):
+            file_list = RECENT_FILES
+        elif mode & (BASE_REPO | COMP_REPO):
+            file_list = RECENT_REPOSITORIES
+        else:
+            return
+
+        settings = QSettings(COMPANY, APPLICATION_NAME)
+        files = settings.value(file_list, type=list)
+
+        if len(files):
+            file = files[index]
+            # print(file)
+            self.on_open(mode, file)
+
     def on_select_buttons_clicked(self, button):
         # buttons = self.select_buttons.buttons()
         # for myButton in buttons:
@@ -549,14 +543,27 @@ class VQLManagerWindow(QMainWindow):
             self.code_show_selector = DIFF_CODE
         self.show_code_text()
 
-    def on_open(self, new_mode):
+    def on_open(self, new_mode, load_path=None):
         """
         Callback for the Open File menu item
         this function is the starting point for loading a model based on a .vql file or a repository
         :param new_mode: the mode of opening
         :type new_mode: int
+        :param load_path: optional parameter for loading from a recent file list
+        :type load_path: str
         :return: nothing
         """
+
+        file = ''
+        folder = ''
+
+        if load_path:
+            if new_mode & (BASE_FILE | COMP_FILE):
+                    file = load_path
+            elif new_mode & (BASE_REPO | COMP_REPO):
+                    folder = load_path
+            else:
+                return
 
         current_mode = self.get_mode()
 
@@ -564,89 +571,51 @@ class VQLManagerWindow(QMainWindow):
             if current_mode & (BASE_LOADED | COMP_LOADED):
                 # some base model is open:
                 if self.ask_drop_changes():
-                    self.on_reset(GUI_NONE)
-                    self.switch_to_mode(GUI_NONE)
+                    self.switch_to_mode(self.new_tree_data(GUI_NONE))
                     self.on_open(new_mode)  # recurse to the begin
                 else:
                     return
             else:  # ok we can load
                 if new_mode & BASE_FILE:
-                    file = self.ask_file_open()
+                    if not file:
+                        file = self.ask_file_open()
                     if file:
-                        QApplication.setOverrideCursor(Qt.WaitCursor)
-                        if self.load_model_from_file(file, BASE_FILE):
-                            self.base_repository_file = file
-                            new_mode |= BASE_LOADED
-                            self.switch_to_mode(new_mode)
-                            self.update_tree_widgets()
-                            self.working_folder = path.dirname(file)
-                            self.add_to_recent_files(file)
-                        else:
-                            return
-                        QApplication.restoreOverrideCursor()
-                    else:
-                        return
+                        self.run(self.load_model_from_file(file, BASE_FILE | GUI_SELECT))
                 elif new_mode & BASE_REPO:
-                    folder = self.ask_repository_open()
+                    if not folder:
+                        folder = self.ask_repository_open()
                     if folder:
-                        QApplication.setOverrideCursor(Qt.WaitCursor)
-                        if self.load_model_from_repository(folder, BASE_REPO):
-                            self.base_repository_folder = folder
-                            new_mode |= BASE_LOADED
-                            self.switch_to_mode(new_mode)
-                            self.update_tree_widgets()
-                            self.working_folder = folder
-                            self.add_to_recent_files(folder)
-                        else:
-                            return
-                        QApplication.restoreOverrideCursor()
-                    else:
-                        return
+                        self.run(self.load_model_from_repository(folder, BASE_REPO | GUI_SELECT))
 
         elif new_mode & GUI_COMPARE:
-            if current_mode & BASE_LOADED:  # there is a base model
-                if current_mode & COMP_LOADED:  # there is a compare going on
-                    if self.ask_drop_changes():
-                        self.on_reset(GUI_COMPARE)
-                        self.on_open(new_mode)  # recurse to the begin
-                    else:
-                        return
-                else:  # ok we can load
-                    if new_mode & COMP_FILE:
-                        file = self.ask_file_open()
-                        if file:
-                            QApplication.setOverrideCursor(Qt.WaitCursor)
-                            if self.load_model_from_file(file, COMP_FILE):
-                                self.compare_repository_file = file
-                                current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
-                                new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_FILE
-                                self.switch_to_mode(new_mode)
-                                self.update_tree_widgets()
-                                self.add_to_recent_files(file)
-                            else:
-                                return
-                            QApplication.restoreOverrideCursor()
-                        else:
-                            return
-                    elif new_mode & COMP_REPO:
-                        folder = self.ask_repository_open()
-                        if folder:
-                            QApplication.setOverrideCursor(Qt.WaitCursor)
-                            if self.load_model_from_repository(folder, COMP_REPO):
-                                self.compare_repository_folder = folder
-                                current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
-                                new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_REPO
-                                self.switch_to_mode(new_mode)
-                                self.update_tree_widgets()
-                                self.add_to_recent_files(folder)
-                            else:
-                                return
-                            QApplication.restoreOverrideCursor()
-                        else:
-                            return
-            else:
+            if not current_mode & BASE_LOADED:  # there is a base model
                 self.message_to_user("No repository loaded yet")
                 return
+
+            if current_mode & COMP_LOADED:  # there is a compare going on
+                if self.ask_drop_changes():
+                    self.switch_to_mode(self.new_tree_data(GUI_SELECT))
+                    self.on_open(new_mode)  # recurse to the begin
+                else:
+                    return
+            else:  # ok we can load
+                if new_mode & COMP_FILE:
+                    if not file:
+                        file = self.ask_file_open()
+                    if file:
+                        self.run(self.load_model_from_file(file, COMP_FILE | GUI_COMPARE))
+                elif new_mode & COMP_REPO:
+                    if not folder:
+                        folder = self.ask_repository_open()
+                    if folder:
+                        self.run(self.load_model_from_repository(folder, COMP_REPO | GUI_COMPARE))
+
+    @staticmethod
+    def run(task):
+        if task:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(task)
+            loop.close()
 
     def on_save(self, save_mode):
         """
@@ -662,17 +631,20 @@ class VQLManagerWindow(QMainWindow):
         if save_mode & FILE:
             file = self.ask_file_save()
             if file:
-                self.save_model_to_file(file)
+                self.run(self.save_model_to_file(file))
         elif save_mode & REPO:
             folder = self.ask_repository_save()
             if folder:
-                self.save_model_to_repository(folder)
+                self.run(self.save_model_to_repository(folder))
 
-    def on_reset(self, reset_mode):
+    def on_reset(self):
         """
         Event handler to reset the model
         :return: nothing
         """
+        settings = QSettings(COMPANY, APPLICATION_NAME)
+        settings.clear()
+
         app_path = path.normpath(self._root + '/vql_manager.py')
         try:
             subprocess.Popen([sys.executable, app_path])
@@ -716,48 +688,11 @@ class VQLManagerWindow(QMainWindow):
             else:
                 self.code_text_edit_cache = None
 
-    def show_code_text(self):
-        if self.code_text_edit_cache:
-            # convenience names
-            item_data = self.code_text_edit_cache
-            selector = self.code_show_selector
-            put_text = self.code_text_edit.setHtml
-            set_title = self.code_text_edit_label.setText
-            object_name = item_data['object_name']
+    def on_about_vql_manager(self):
+        QMessageBox.about(self, 'About ' + self.windowTitle(), about_text)
 
-            if self._mode & GUI_SELECT:
-                html_code = self.format_source_code(object_name, item_data['code'], selector)
-                set_title("Code: " + object_name)
-            elif self._mode & GUI_COMPARE:
-
-                if selector & ORIGINAL_CODE:
-                    html_code = self.format_source_code(object_name, item_data['code'], selector)
-                    set_title("Original Code: " + object_name)
-                elif selector & COMPARE_CODE:
-                    html_code = self.format_source_code(object_name, item_data['compare_code'], selector)
-                    set_title("New Code: " + object_name)
-                elif selector & DIFF_CODE:
-                    html_code = self.format_source_code(object_name, item_data['difference'], selector)
-                    set_title("Differences : " + object_name)
-            put_text(html_code)
-
-    def add_to_recent_files(self, file):
-        settings = QSettings(COMPANY, APPLICATION_NAME)
-        if path.isfile(file):
-            settings_list = 'recent_file_list'
-        elif path.isdir(file):
-            settings_list = 'recent_repository_list'
-        else:
-            return
-
-        files = settings.value(settings_list, type=list)
-        if file in files:
-            files.remove(file)
-        files = [file] + files
-        if len(files) > self.max_recent_files:
-            files = files[:self.max_recent_files]
-        settings.setValue(settings_list, files)
-        self.update_recent_file_actions()
+    def on_about_qt(self):
+        QMessageBox.aboutQt(self, self.windowTitle())
 
     @staticmethod
     def format_source_code(object_name, raw_code, code_type):
@@ -779,7 +714,10 @@ class VQLManagerWindow(QMainWindow):
             # print(html)
 
         elif code_type & DIFF_CODE:
-            return raw_code
+            code = raw_code.replace('\n', '<br />\n')
+            code = code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
+
+            return code
 
         return html
 
@@ -859,29 +797,6 @@ class VQLManagerWindow(QMainWindow):
             self.message_to_user("No folder found")
             return ''
 
-        possible_folders = [name.replace(' ', '_') for name in CHAPTER_NAMES]
-        matching_folders = set(possible_folders) & set(listdir(folder))
-
-        if len(matching_folders) == 0:
-            self.message_to_user("No sub folders found")
-            return ''
-
-        # part_logger = list()
-        for sub_folder in matching_folders:
-            part_file_to_check = path.join(folder, sub_folder, 'part.log')
-            if path.isfile(part_file_to_check):
-                file = self.read_file(part_file_to_check)
-                part_logger = file.split('\n')
-                for file_to_check in part_logger:
-                    if file_to_check:
-                        if not path.isfile(file_to_check):
-                            self.message_to_user("File: " + file_to_check +
-                                                 " not found. Make sure your repository is not corrupt")
-                            return ''
-            else:
-                self.message_to_user("Part.log file: " + part_file_to_check +
-                                     " not found. Make sure your repository is not corrupt")
-                return ''
         return folder
 
     def ask_repository_save(self):
@@ -1073,7 +988,7 @@ class VQLManagerWindow(QMainWindow):
                 self.error_message_box("Error", "An error occurred during the removal of files in the folder: "
                                        + self.base_repository_folder, e)
 
-    def read_file(self, file):
+    async def read_file(self, file):
         """
         General function to read in a file
         :param file: The path to the file
@@ -1089,7 +1004,7 @@ class VQLManagerWindow(QMainWindow):
             self.error_message_box("Error", "An error occurred during reading of file: " + file, e)
         return content
 
-    def write_file(self, file, content):
+    async def write_file(self, file, content):
         """
         General function to write a file to disk
         :param file: the path where the file should be written to
@@ -1108,31 +1023,9 @@ class VQLManagerWindow(QMainWindow):
             self.error_message_box("Error", "An error occurred during writing of file: " + file, e)
         return ok
 
-    def read_vql_folder(self, folder):
-        """
-        Helper function to the load_model_from_folder function
-        This function actually reads all files in the repository and loads the contents in the all_chapters_treeview
-        :param folder: The base folder of the repository
-        :return: nothing
-        """
-        tree = self.all_chapters_treeview
-        tree.set_base_folder(folder)
-        content = PROP_QUOTE
-        for chapter_name, chapter in tree.chapters.items():
-            content += chapter.header
-            part_log_filepath, _ = chapter.get_part_log()
-
-            if path.isfile(part_log_filepath):
-                part_logs = self.read_file(part_log_filepath).split('\n')
-                for file in part_logs:
-                    filepath = file
-                    if path.isfile(filepath):
-                        content += self.read_file(filepath)
-        return content
-
     # Saving and loading models
 
-    def load_model_from_file(self, file, mode):
+    async def load_model_from_file(self, file, new_mode):
         """
         Function to load a single .vql file into the VqlModel instance: all_chapters_treeview
         via its parse function. This function is called after all checks have been done
@@ -1144,50 +1037,108 @@ class VQLManagerWindow(QMainWindow):
         #     return False
 
         self.statusBar.showMessage("Loading model")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         # mode = self.get_mode()
         tree = self.all_chapters_treeview
-        content = self.read_file(file)
+        content = await self.read_file(file)
+        current_mode = self.get_mode()
 
         if content:
             tree.blockSignals(True)
-            tree.parse(content, mode)
+            await tree.parse(content, new_mode)
             self.update_tree_widgets()
             tree.blockSignals(False)
         self.statusBar.showMessage("Ready")
-        return True
 
-    def load_model_from_repository(self, folder, mode):
+        if new_mode & BASE_FILE:
+            self.base_repository_file = file
+            new_mode |= BASE_LOADED
+        elif new_mode & COMP_FILE:
+            self.compare_repository_file = file
+            current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
+            new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_FILE
+
+        self.switch_to_mode(new_mode)
+        self.update_tree_widgets()
+        self.working_folder = path.dirname(file)
+        self.add_to_recent_files(file, FILE)
+        QApplication.restoreOverrideCursor()
+        return
+
+    async def load_model_from_repository(self, folder, new_mode):
         """
         Function to load a repository folder structure into the VqlModel instance: all_chapters_treeview
         via the read_vql_folder function. This function is called after all checks have been done
         :return: nothing
         """
 
-        tree = self.all_chapters_treeview
-        self.statusBar.showMessage("Loading model")
+        possible_folders = [name.replace(' ', '_') for name in CHAPTER_NAMES]
+        matching_folders = set(possible_folders) & set(listdir(folder))
 
+        if len(matching_folders) == 0:
+            self.message_to_user("No sub folders found")
+            return
+
+        # part_logger = list()
+        for sub_folder in matching_folders:
+            part_file_to_check = path.join(folder, sub_folder, 'part.log')
+            if path.isfile(part_file_to_check):
+                file = await self.read_file(part_file_to_check)
+                part_logger = file.split('\n')
+                for file_to_check in part_logger:
+                    if file_to_check:
+                        if not path.isfile(file_to_check):
+                            self.message_to_user("File: " + file_to_check +
+                                                 " not found. Make sure your repository is not corrupt")
+                            return
+            else:
+                self.message_to_user("Part.log file: " + part_file_to_check +
+                                     " not found. Make sure your repository is not corrupt")
+                return
+
+        self.statusBar.showMessage("Loading model")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        tree = self.all_chapters_treeview
+        current_mode = self.get_mode()
         content = PROP_QUOTE
         for chapter in tree.chapters:
             content += chapter.header
             part_log_filepath, _ = chapter.get_part_log(folder)
             if path.isfile(part_log_filepath):
-                part_logs = self.read_file(part_log_filepath).split('\n')
-                files = [self.read_file(file) for file in part_logs if path.isfile(file)]
+                part_logs = await self.read_file(part_log_filepath)
+                part_logs = part_logs.split('\n')
+                files = list()
+                for file in part_logs:
+                    if path.isfile(file):
+                        files.append(await self.read_file(file))
                 content += ''.join(files)
 
-        # content = self.read_vql_folder(folder)
         if content:
             tree.blockSignals(True)
-            tree.parse(content, mode)
+            await tree.parse(content, new_mode)
             self.update_tree_widgets()
             tree.blockSignals(False)
         else:
             self.statusBar.showMessage("Load Failed")
-            return False
+            return
         self.statusBar.showMessage("Ready")
-        return True
 
-    def save_model_to_file(self, file):
+        if new_mode & BASE_REPO:
+            self.base_repository_folder = folder
+            new_mode |= BASE_LOADED
+        elif new_mode & COMP_REPO:
+            self.compare_repository_folder = folder
+            current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
+            new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_REPO
+
+        self.switch_to_mode(new_mode)
+        self.update_tree_widgets()
+        self.working_folder = folder
+        self.add_to_recent_files(folder, REPO)
+        QApplication.restoreOverrideCursor()
+        return
+
+    async def save_model_to_file(self, file):
         """
         Function to save the single .vql file
         :return: Boolean on success
@@ -1207,14 +1158,14 @@ class VQLManagerWindow(QMainWindow):
         content = tree.get_code_as_file(selected=True)
         tree.blockSignals(False)
         if content:
-            if self.write_file(file, content):
+            if await self.write_file(file, content):
                 self.statusBar.showMessage("Ready")
                 return True
             else:
                 self.statusBar.showMessage("Save error")
                 return False
 
-    def save_model_to_repository(self, folder):
+    async def save_model_to_repository(self, folder):
         """
         Function to save the model selection to a repository
         The files are written to chapter_folder
@@ -1249,7 +1200,7 @@ class VQLManagerWindow(QMainWindow):
                 self.statusBar.showMessage("Save Error")
                 return False
 
-            if not self.write_file(part_log_filepath, part_log_content):
+            if not await self.write_file(part_log_filepath, part_log_content):
                 self.statusBar.showMessage("Save Error")
                 return False
         for file_path, content in tree.get_selected_code_files(folder):
@@ -1259,7 +1210,7 @@ class VQLManagerWindow(QMainWindow):
             if not file_path:
                 self.statusBar.showMessage("Save Error")
                 return False
-            if not self.write_file(path.normpath(file_path), content):
+            if not await self.write_file(path.normpath(file_path), content):
                 self.statusBar.showMessage("Save Error")
                 return False
 
@@ -1267,6 +1218,52 @@ class VQLManagerWindow(QMainWindow):
 
         self.statusBar.showMessage("Ready")
         return True
+
+    def add_to_recent_files(self, file_path, mode):
+        settings = QSettings(COMPANY, APPLICATION_NAME)
+
+        if mode & FILE:
+            settings_list = RECENT_FILES
+        elif mode & REPO:
+            settings_list = RECENT_REPOSITORIES
+        else:
+            return
+        paths = settings.value(settings_list, type=list)
+        print(paths)
+
+        if file_path in paths:
+            paths.remove(file_path)
+        paths = [file_path] + paths
+        if len(paths) > MAX_RECENT_FILES:
+            paths = paths[:MAX_RECENT_FILES]
+        settings.setValue(settings_list, paths)
+
+        self.update_recent_file_actions()
+
+    def show_code_text(self):
+        if self.code_text_edit_cache:
+            # convenience names
+            item_data = self.code_text_edit_cache
+            selector = self.code_show_selector
+            put_text = self.code_text_edit.setHtml
+            set_title = self.code_text_edit_label.setText
+            object_name = item_data['object_name']
+
+            if self._mode & GUI_SELECT:
+                html_code = self.format_source_code(object_name, item_data['code'], selector)
+                set_title("Code: " + object_name)
+            elif self._mode & GUI_COMPARE:
+
+                if selector & ORIGINAL_CODE:
+                    html_code = self.format_source_code(object_name, item_data['code'], selector)
+                    set_title("Original Code: " + object_name)
+                elif selector & COMPARE_CODE:
+                    html_code = self.format_source_code(object_name, item_data['compare_code'], selector)
+                    set_title("New Code: " + object_name)
+                elif selector & DIFF_CODE:
+                    html_code = self.format_source_code(object_name, item_data['difference'], selector)
+                    set_title("Differences : " + object_name)
+            put_text(html_code)
 
     def update_tree_widgets(self):
         """

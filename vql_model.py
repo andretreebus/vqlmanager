@@ -13,7 +13,7 @@ Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
-
+import asyncio
 from vql_manager_core import *
 from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QPixmap
@@ -162,7 +162,7 @@ class VqlModel(QTreeWidget):
             self.setToolTip(html)
             self.setToolTipDuration(1000)
 
-    def parse(self, file_content, mode):
+    async def parse(self, file_content, mode):
         """
         Generator of parsed pieces of the vql file per Denodo object
         :param file_content: the file to parse
@@ -233,14 +233,15 @@ class VqlModel(QTreeWidget):
                         index += 1
 
         # formatting the tree items
-        for _, code_item in self.get_code_items():
-            if code_item.color == RED:
-                code_item.setCheckState(0, UNCHECKED)
-        for chapter in self.chapters:
-            chapter.set_gui(gui)
-            chapter.set_color_based_on_children(gui)
-            if chapter.childCount() == 0:
-                chapter.setCheckState(0, UNCHECKED)
+        if gui & GUI_COMPARE:
+            for _, code_item in self.get_code_items():
+                if code_item.color == RED:
+                    code_item.setCheckState(0, UNCHECKED)
+            for chapter in self.chapters:
+                chapter.set_gui(gui)
+                chapter.set_color_based_on_children(gui)
+                if chapter.childCount() == 0:
+                    chapter.setCheckState(0, UNCHECKED)
 
     def change_view(self, new_view, mode):
         gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)
@@ -316,3 +317,7 @@ class VqlModel(QTreeWidget):
             folder_item.set_color_based_on_children(gui)
 
         self.storage_list = temp_root.takeChildren()
+
+    def remove_compare(self):
+        for _, item in self.get_code_items():
+            item.remove_compare()
