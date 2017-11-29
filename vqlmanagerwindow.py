@@ -175,7 +175,6 @@ class VQLManagerWindow(QMainWindow):
             for dep in item.dependees:
                 print(dep.object_name)
 
-
     @staticmethod
     def create_tree_widget(parent, class_type, flags, header=None, tooltip=None):
         tree_widget = class_type(parent)
