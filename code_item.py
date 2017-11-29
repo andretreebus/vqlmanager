@@ -23,7 +23,9 @@ Last edited: November 2017
 
 from vql_manager_core import *
 from os import path
-from difflib import Differ
+# from difflib import Differ
+# from diff_match_patch import diff_match_patch, patch_obj
+
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
 
@@ -34,9 +36,6 @@ class CodeItem(QTreeWidgetItem):
     It inherits from QTreeWidgetItem, so it can display in a QTreeWidget
     Basically a bag for pieces of Denodo code
     """
-
-    diff_engine = Differ()
-
     def __init__(self, parent, chapter_name, mode, code=None, compare_code=None, preceding=None):
         """
         CodeItem Class
@@ -60,7 +59,6 @@ class CodeItem(QTreeWidgetItem):
         self.compare_code = compare_code
         self.object_name = ''
         self.denodo_folder = ''
-        self.difference = ''
         self.color = WHITE
         self.gui = GUI_SELECT
         if code:
@@ -91,22 +89,52 @@ class CodeItem(QTreeWidgetItem):
                     self.set_color(WHITE)
                 else:
                     self.set_color(YELLOW)
-                    self.difference = self.get_diff(self.code, self.compare_code)
             else:
                 self.set_color(RED)
-                self.difference = ''
         else:
             if self.compare_code:
                 self.set_color(GREEN)
-                self.difference = ''
             else:
                 self.suicide()
 
-    def get_diff(self, code, compare_code):
-        former_code_split = (code + '\n').splitlines(True)
-        next_code_split = (compare_code + '\n').splitlines(True)
-        diff = list(self.diff_engine.compare(former_code_split, next_code_split))
-        return ''.join(diff)
+    @staticmethod
+    def get_diff(code, compare_code):
+
+        def format_code(_code):
+            _code = _code.replace('<br>', '<br />\n')
+            _code = _code.replace('&para;', '')
+            _code = _code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
+            return _code
+
+        def format_code2(_code):
+            _code = _code.replace('\n', '<br />\n')
+            _code = _code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
+            return _code
+
+        def set_green(_code):
+            return '<span>' + new_diff_ins_indicator + _code + '</ins></span>'
+
+        def set_red(_code):
+            return '<span>' + new_diff_del_indicator + _code + '</del></span>'
+
+        diff_ins_indicator = '<ins style="background:#e6ffe6;">'
+        diff_del_indicator = '<del style="background:#ffe6e6;">'
+        new_diff_ins_indicator = '<ins style="color:' + green + ';">'
+        new_diff_del_indicator = '<del style="color:' + red + ';">'
+        diff_html = ''
+        if code:
+            if compare_code:
+                diff = diff_engine.diff_main(code, compare_code)
+                diff_html = format_code(diff_engine.diff_prettyHtml(diff))
+                diff_html = diff_html.replace(diff_ins_indicator, new_diff_ins_indicator)
+                diff_html = diff_html.replace(diff_del_indicator, new_diff_del_indicator)
+            else:
+                diff_html = format_code2(set_red(code))
+        else:
+            if compare_code:
+                diff_html = format_code2(set_green(compare_code))
+
+        return diff_html
 
     def pack(self, color_filter):
         if color_filter:
@@ -122,11 +150,11 @@ class CodeItem(QTreeWidgetItem):
         self.user_data['code'] = self.code
         self.user_data['compare_code'] = self.compare_code
         self.user_data['color'] = self.color
-        self.user_data['difference'] = self.difference
         self.user_data['denodo_folder'] = self.denodo_folder
         self.user_data['gui'] = self.gui
         self.user_data['class_type'] = self.class_type
         self.user_data['selected'] = self.is_selected()
+        self.user_data['hidden'] = self.isHidden()
         self.setData(0, Qt.UserRole, self.user_data)
 
     @staticmethod
@@ -137,11 +165,11 @@ class CodeItem(QTreeWidgetItem):
         item.code = item.user_data['code']
         item.compare_code = item.user_data['compare_code']
         item.color = item.user_data['color']
-        item.difference = item.user_data['difference']
         item.denodo_folder = item.user_data['denodo_folder']
         item.gui = item.user_data['gui']
         item.class_type = item.user_data['class_type']
         item.is_selected = item.user_data['selected']
+        item.setHidden(item.user_data['hidden'])
 
     def set_gui(self, gui):
         self.gui = gui
@@ -194,7 +222,6 @@ class CodeItem(QTreeWidgetItem):
             self.gui = GUI_SELECT
             if self.compare_code:
                 self.compare_code = None
-                self.difference = ''
                 self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.code)
                 if self.mode & COMP_FILE:
                     self.mode = self.mode - COMP_FILE

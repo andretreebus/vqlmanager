@@ -14,7 +14,7 @@ Last edited: November 2017
 
 from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
-
+from diff_match_patch import diff_match_patch, patch_obj
 
 COMPANY = 'www.erasmusmc.nl'
 APPLICATION_NAME = 'VQL Manager'
@@ -225,3 +225,10 @@ Duis aute irure dolor in reprehenderit in voluptate velit
 esse cillum dolore eu fugiat nulla pariatur. 
 Excepteur sint occaecat cupidatat non proident, 
 sunt in culpa qui officia deserunt mollit anim id est laborum'''
+
+diff_engine = diff_match_patch()
+diff_engine.Diff_Timeout = 2
+diff_engine.Match_Threshold = 0.0
+diff_engine.Patch_DeleteThreshold = 0.0
+diff_engine.Match_MaxBits = 0
+

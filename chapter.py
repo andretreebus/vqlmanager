@@ -80,7 +80,6 @@ class Chapter(QTreeWidgetItem):
         for chapter in self.chapter_items:
             chapter.parent_chapter_name = self.name
             chapter.pack(color_filter)
-        # self.user_data['selected_child_count'] = self.selected_child_count
         self.set_color_based_on_children(self.gui)
         self.setData(0, Qt.UserRole, self.user_data)
 

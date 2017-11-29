@@ -49,9 +49,6 @@ class VQLManagerWindow(QMainWindow):
         self._root = QFileInfo(__file__).absolutePath()
         images = self._root + '/images/'
 
-        # settings = QSettings(COMPANY, APPLICATION_NAME)
-        # settings.clear()
-
         self.resize(1200, 800)
         self.setMinimumSize(QSize(860, 440))
         self.setIconSize(QSize(32, 32))
@@ -244,15 +241,15 @@ class VQLManagerWindow(QMainWindow):
 
         #  Layout ################################################################################
         # left pane
-        self.layout.addWidget(self.mode_label,                0, 0, 1, 1)
-        self.layout.addWidget(self.base_repository_label,     1, 0, 1, 1)
-        self.layout.addWidget(self.compare_repository_label,  2, 0, 1, 1)
+        self.layout.addWidget(self.mode_label,                0, 0, 1, 2)
+        self.layout.addWidget(self.base_repository_label,     1, 0, 1, 2)
+        self.layout.addWidget(self.compare_repository_label,  2, 0, 1, 2)
         self.layout.addWidget(self.select_buttons,            3, 0, 1, 1)
         self.layout.addWidget(self.all_chapters_treeview,     4, 0, 4, 1)
 
         # right pane
 
-        self.layout.addWidget(self.selection_viewer_label,  0, 1, 4, 1)
+        self.layout.addWidget(self.selection_viewer_label,  3, 1, 1, 1)
         self.layout.addWidget(self.selected_treeview,       4, 1, 1, 1)
         self.layout.addWidget(self.code_text_edit_label, 5, 1, 1, 1)
         self.layout.addWidget(self.diff_buttons,            6, 1, 1, 1)
@@ -269,7 +266,7 @@ class VQLManagerWindow(QMainWindow):
         self.layout.setRowStretch(7, 12)
 
         self.layout.setColumnStretch(0, 1)
-        self.layout.setColumnStretch(1, 1)
+        self.layout.setColumnStretch(1, 2)
 
         self.statusBar.setMinimumSize(QSize(0, 20))
         self.statusBar.showMessage("Ready")
@@ -508,11 +505,6 @@ class VQLManagerWindow(QMainWindow):
             self.on_open(mode, file)
 
     def on_select_buttons_clicked(self, button):
-        # buttons = self.select_buttons.buttons()
-        # for myButton in buttons:
-        #     if myButton != button:
-        #         button.setChecked(False)
-
         text = button.text()
         tree = self.all_chapters_treeview
         if text == 'All':
@@ -528,10 +520,6 @@ class VQLManagerWindow(QMainWindow):
         self.update_tree_widgets()
 
     def on_diff_buttons_clicked(self, button):
-        # buttons = self.select_buttons.buttons()
-        # for myButton in buttons:
-        #     if myButton != button:
-        #         button.setChecked(False)
 
         text = button.text()
 
@@ -682,7 +670,6 @@ class VQLManagerWindow(QMainWindow):
                 cache['object_name'] = item_data['object_name']
                 cache['code'] = item_data['code']
                 cache['compare_code'] = item_data['compare_code']
-                cache['difference'] = item_data['difference']
                 self.code_text_edit_cache = cache
                 self.show_code_text()
             else:
@@ -711,14 +698,9 @@ class VQLManagerWindow(QMainWindow):
             body = '<p style="color:' + white + '">' + code + '</p>'
             body = body.replace(object_name, '<font color="' + red + '">' + object_name + '</font>')
             html = doc_template(object_name, body)
-            # print(html)
 
         elif code_type & DIFF_CODE:
-            code = raw_code.replace('\n', '<br />\n')
-            code = code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
-
-            return code
-
+            html = doc_template(object_name, raw_code)
         return html
 
     def on_switch_view(self):
@@ -812,13 +794,8 @@ class VQLManagerWindow(QMainWindow):
             open_path = path.curdir
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptSave)
-        # dialog.setDefaultSuffix('vql')
-        # dialog.setWindowTitle("Select single VQL file")
         dialog.setFileMode(QFileDialog.Directory)
-        # dialog.setViewMode(QFileDialog.Detail)
         folder = dialog.getExistingDirectory(self, "Save to Repository", open_path)
-
-        # folder = self.ask_folder()
 
         if not folder:
             return ''
@@ -1229,7 +1206,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             return
         paths = settings.value(settings_list, type=list)
-        print(paths)
+        # print(paths)
 
         if file_path in paths:
             paths.remove(file_path)
@@ -1261,7 +1238,8 @@ class VQLManagerWindow(QMainWindow):
                     html_code = self.format_source_code(object_name, item_data['compare_code'], selector)
                     set_title("New Code: " + object_name)
                 elif selector & DIFF_CODE:
-                    html_code = self.format_source_code(object_name, item_data['difference'], selector)
+                    difference = CodeItem.get_diff(item_data['code'], item_data['compare_code'])
+                    html_code = self.format_source_code(object_name, difference, selector)
                     set_title("Differences : " + object_name)
             put_text(html_code)
 
