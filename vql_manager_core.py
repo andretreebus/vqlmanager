@@ -14,7 +14,7 @@ Last edited: November 2017
 
 from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
-from diff_match_patch import diff_match_patch, patch_obj
+from diff_match_patch import diff_match_patch
 
 COMPANY = 'www.erasmusmc.nl'
 APPLICATION_NAME = 'VQL Manager'
@@ -217,14 +217,10 @@ def doc_template(object_name, body):
 
 
 about_text = '''
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
-sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
-Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris 
-nisi ut aliquip ex ea commodo consequat. 
-Duis aute irure dolor in reprehenderit in voluptate velit
-esse cillum dolore eu fugiat nulla pariatur. 
-Excepteur sint occaecat cupidatat non proident, 
-sunt in culpa qui officia deserunt mollit anim id est laborum'''
+VQL Manager was created by Erasmus MC Rotterdam The Netherlands 2017.
+This application is open source software.
+Questions and remarks should be sent to: andretreebus@hotmail.com
+'''
 
 diff_engine = diff_match_patch()
 diff_engine.Diff_Timeout = 2

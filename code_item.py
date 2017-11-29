@@ -23,9 +23,6 @@ Last edited: November 2017
 
 from vql_manager_core import *
 from os import path
-# from difflib import Differ
-# from diff_match_patch import diff_match_patch, patch_obj
-
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
 

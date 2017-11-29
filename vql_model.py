@@ -13,7 +13,7 @@ Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
-# import asyncio
+
 from vql_manager_core import *
 from PyQt5.QtCore import Qt, QBuffer, QIODevice
 from PyQt5.QtGui import QPixmap

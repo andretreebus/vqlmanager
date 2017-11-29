@@ -16,17 +16,18 @@ Last edited: November 2017
 from os import path, makedirs, listdir, unlink, rmdir
 import subprocess
 import sys
-from vql_manager_core import *
 import asyncio
+from functools import partial
+
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
+from vql_manager_core import *
 from vql_model import VqlModel
 from code_item import CodeItem
-from functools import partial
 
 
 class VQLManagerWindow(QMainWindow):
