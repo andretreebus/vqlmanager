@@ -150,6 +150,9 @@ class VQLManagerWindow(QMainWindow):
         self.options_menu = QMenu()
         self.update_timer = QTimer()
 
+        self.all_chapters_treeview.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.all_chapters_treeview.customContextMenuRequested.connect(self.on_right_click)
+
         # Format and setup all widgets
         self.setup_ui()
 
@@ -164,6 +167,14 @@ class VQLManagerWindow(QMainWindow):
         self.switch_to_mode(GUI_NONE)
         self.code_show_selector = ORIGINAL_CODE
         self.code_text_edit_cache = None
+
+    def on_right_click(self, pos):
+        item = self.all_chapters_treeview.itemAt(pos)
+        if item.class_type == CodeItem:
+            print(item.object_name)
+            for dep in item.dependees:
+                print(dep.object_name)
+
 
     @staticmethod
     def create_tree_widget(parent, class_type, flags, header=None, tooltip=None):

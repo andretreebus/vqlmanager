@@ -87,8 +87,13 @@ class VqlModel(QTreeWidget):
             chapter = Chapter(self.root, chapter_name)
             self.chapters.append(chapter)
 
-    def get_code_items(self):
-        for chapter in self.chapters:
+    def get_code_items(self, chapter_list=None):
+        if chapter_list:
+            chapters = (chapter for chapter in self.chapters if chapter.name in chapter_list)
+        else:
+            chapters = (chapter for chapter in self.chapters)
+
+        for chapter in chapters:
             for code_item in chapter.code_items:
                 yield (chapter, code_item)
 
@@ -230,7 +235,7 @@ class VqlModel(QTreeWidget):
                                                   CodeItem(chapter, chapter.name, mode,
                                                            compare_code=code, preceding=index_child))
                         index += 1
-
+        self.get_dependencies()
         # formatting the tree items
         if gui & GUI_COMPARE:
             for _, code_item in self.get_code_items():
@@ -241,6 +246,82 @@ class VqlModel(QTreeWidget):
                 chapter.set_color_based_on_children(gui)
                 if chapter.childCount() == 0:
                     chapter.setCheckState(0, UNCHECKED)
+
+    def get_dependencies(self):
+        # folders = {code_item.object_name.lower(): code_item for code_item in self.get_chapter_by_name('FOLDERS').code_items}
+        # chapter_filter = ['DATASOURCES', 'WRAPPERS', 'BASE VIEWS', 'VIEWS', 'ASSOCIATIONS']
+        # # chapter_only_dependencies = ['WRAPPERS', 'BASE VIEWS', 'VIEWS']
+        # for chapter, item in self.get_code_items(chapter_list=chapter_filter):
+        #     chapter_index = self.chapters.index(chapter)
+        #     if item.denodo_folder:
+        #         folder = folders[item.denodo_folder.lower()]
+
+        def find_wrapper_deps(code_objects, under_lying_code_objects):
+            for code_object, code_object_name, code in code_objects:
+                for other_code_item, other_name, other_code in under_lying_code_objects:
+                    search_string = 'datasourcename=' + other_name
+                    if not code.find(search_string) == -1:
+                        code_object.dependencies.append(other_code_item)
+                        # print(code_object.object_name, other_name)
+
+        def find_base_view_deps(code_objects, under_lying_code_objects):
+            for code_object, code_object_name, code in code_objects:
+                for other_code_item, other_name, other_code in under_lying_code_objects:
+                    search_string = 'wrapper (jdbc ' + other_name + ')'
+                    if not code.find(search_string) == -1:
+                        code_object.dependencies.append(other_code_item)
+                        # print(code_object.object_name, other_name)
+                    search_string = 'wrapper (df ' + other_name + ')'
+                    if not code.find(search_string) == -1:
+                        code_object.dependencies.append(other_code_item)
+                        # print(code_object.object_name, other_name)
+                    search_string = 'wrapper (ldap ' + other_name + ')'
+                    if not code.find(search_string) == -1:
+                        code_object.dependencies.append(other_code_item)
+                        # print(code_object.object_name, other_name)
+
+        def find_view_deps(code_objects, under_lying_code_objects):
+            for code_object, code_object_name, code in code_objects:
+                for other_code_item, other_name, other_code in under_lying_code_objects:
+                    search_string = 'from ' + other_name
+                    if not code.find(search_string) == -1:
+                        code_object.dependencies.append(other_code_item)
+                        # print(code_object.object_name, other_name)
+
+        def find_association_deps(code_objects, under_lying_code_objects):
+            for code_object, code_object_name, code in code_objects:
+                for other_code_item, other_name, other_code in under_lying_code_objects:
+                    search_string = ' ' + other_name + ' '
+                    if not code.find(search_string) == -1:
+                        code_object.dependencies.append(other_code_item)
+                        # print(code_object.object_name, other_name)
+
+        datasources = [(code_item, code_item.object_name.lower(), code_item.code.lower())
+                       for code_item in self.get_chapter_by_name('DATASOURCES').code_items]
+
+        wrappers = [(code_item, code_item.object_name.lower(), code_item.code.lower())
+                    for code_item in self.get_chapter_by_name('WRAPPERS').code_items]
+
+        base_views = [(code_item, code_item.object_name.lower(), code_item.code.lower())
+                      for code_item in self.get_chapter_by_name('BASE VIEWS').code_items]
+
+        views = [(code_item, code_item.object_name.lower(), code_item.code.lower())
+                 for code_item in self.get_chapter_by_name('VIEWS').code_items]
+
+        associations = [(code_item, code_item.object_name.lower(), code_item.code.lower())
+                        for code_item in self.get_chapter_by_name('ASSOCIATIONS').code_items]
+
+        find_wrapper_deps(wrappers, datasources)
+        find_base_view_deps(base_views, wrappers)
+        find_view_deps(views, base_views)
+        find_view_deps(views, views)
+        find_association_deps(associations, views)
+
+        for chapter, item in self.get_code_items():
+            for item_dependency in item.dependencies:
+                item_dependency.dependees.append(item)
+
+
 
     def change_view(self, new_view, mode):
         gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)

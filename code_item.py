@@ -58,6 +58,9 @@ class CodeItem(QTreeWidgetItem):
         self.denodo_folder = ''
         self.color = WHITE
         self.gui = GUI_SELECT
+        self.dependencies = list()
+        self.dependees = list()
+
         if code:
             self.object_name = self.extract_object_name_from_code(self.chapter_name, self.code)
             self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.code)
@@ -319,3 +322,4 @@ class CodeItem(QTreeWidgetItem):
             pass  # Todo: we don't use these kind of objects in Denodo
 
         return object_name
+
