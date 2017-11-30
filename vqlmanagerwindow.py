@@ -171,9 +171,17 @@ class VQLManagerWindow(QMainWindow):
     def on_right_click(self, pos):
         item = self.all_chapters_treeview.itemAt(pos)
         if item.class_type == CodeItem:
-            print(item.object_name)
-            for dep in item.dependees:
-                print(dep.object_name)
+            all_dependees = '\n'.join(['\n>>' + code_item.chapter_name.lower() + ': ' + code_item.object_name
+                                      for code_item in self.get_all_dependees(item)])
+            message = item.object_name + ' is a parent of:\n' + all_dependees
+            self.message_to_user(message)
+
+    def get_all_dependees(self, item, items=list()):
+        for item in item.dependees:
+            items.append(item)
+            self.get_all_dependees(item, items)
+        else:
+            return items
 
     @staticmethod
     def create_tree_widget(parent, class_type, flags, header=None, tooltip=None):

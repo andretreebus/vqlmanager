@@ -60,6 +60,8 @@ class CodeItem(QTreeWidgetItem):
         self.gui = GUI_SELECT
         self.dependencies = list()
         self.dependees = list()
+        self.compare_dependencies = list()
+        self.compare_dependees = list()
 
         if code:
             self.object_name = self.extract_object_name_from_code(self.chapter_name, self.code)
