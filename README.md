@@ -9,25 +9,41 @@ This application supports:
 
 
 # Installation:
-Install the required libs with pip or with installer
+install python3.6 or later from the official python.org
 
-Required libs
+Open command prompt and create a virtual environment "venv" in some folder
 
->PyQt5 
+* python3 -m venv C:\path\to\new\virtual\environment
 
->shutil 
+pip will be available in the new environment
+install wheel and setuptools:
 
->collections 
+* pip install wheel setuptools
 
->qdarkstyle
+install PyQt5 and QDarkStyle
 
-Note: This code runs on python 3.5
-it should run on every python 3 version
+* pip install PyQt5
+
+* pip install qdarkstyle
+
+PyQt will install sip as well 
+
+I had to restart my pc before it worked
 
 # Execution
-To run this application just start up the main entry:
-switch to the local installation folder and run:
+To run this application just start up the main entry: vqlmanager.py 
+Switch to the folder:
 
-python3 vqlmanager.py
+* cd C:\path\to\new\virtual\environment
+
+and run the program
+
+* python vqlmanager.py
+
+You can make a link on your desktop to start the app
+Start the program from the the environment folder.
+
+# Using the application
+
 
 
