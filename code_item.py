@@ -22,23 +22,32 @@ Last edited: November 2017
 """
 
 from vql_manager_core import *
-from os import path
+from pathlib import Path
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
 
 
 class CodeItem(QTreeWidgetItem):
-    """
-    CodeItem class represents a .vql file with a single Denodo object
-    It inherits from QTreeWidgetItem, so it can display in a QTreeWidget
-    Basically a bag for pieces of Denodo code
+    """CodeItem class represents a .vql file with a single Denodo object.
+
+    It inherits from QTreeWidgetItem, so it can display in a QTreeWidget.
+    Basically a bag for pieces of Denodo code.
     """
     def __init__(self, parent, chapter_name, mode, code=None, compare_code=None, preceding=None):
-        """
-        CodeItem Class
-        :param parent:
+        """CodeItem Class constructor.
+
+        :param parent: The object owning this object
+        :type parent: Chapter
         :param chapter_name: the chapter name
-        :param code: the code related to this denodo object
+        :type chapter_name: str
+        :param mode: the mode flag
+        :type mode: int
+        :param code: optional: the code related to this denodo object
+        ::type code: str
+        :param code: optional: the other code related to this denodo object for comparisons
+        ::type code: str
+        :param preceding: the CodeItem after which this code item is placed in the tree
+        :type preceding: CodeItem
         """
 
         if preceding:
@@ -80,11 +89,26 @@ class CodeItem(QTreeWidgetItem):
         self.pack(None)
 
     def set_compare_code(self, compare_code, mode):
+        """Setter for the compare mode and code.
+
+        :param compare_code: the other code
+        :type compare_code: str
+        :param mode: new mode
+        :type mode: int
+        :return: None
+        :rtype: None
+        """
         self.mode |= mode
         self.compare_code = compare_code
         self.compare()
 
     def compare(self):
+        """Compare the code and sets color to the item itself.
+
+        White = unchanged; Red = lost; Green = new; Yellow = changed
+        :return: None
+        :rtype: None
+        """
         if self.code:
             if self.compare_code:
                 if self.compare_code == self.code:
@@ -97,11 +121,26 @@ class CodeItem(QTreeWidgetItem):
             if self.compare_code:
                 self.set_color(GREEN)
             else:
+                # code item with identity crisis
                 self.suicide()
 
     @staticmethod
     def get_diff(code, compare_code):
+        """Supplies the code edit widget with html for the comparison.
 
+        The main intel of this function is supplied by the global instance of the diff_match_patch.py engine
+        maintained on Google. Here the engine is used on the two code pieces and a patch is calculated
+        the patch is again inserted in the prettyHtml function of the engine and modded a bit
+        The colors are similar to the usage in this tool
+        to get new code (compare_code) from old code (code), remove red, add green
+
+        :param code: the original code
+        :type code: str
+        :param compare_code: the new code
+        :type compare_code: str
+        :return: html representation of teh difference
+        :rtype: str
+        """
         def format_code(_code):
             _code = _code.replace('<br>', '<br />\n')
             _code = _code.replace('&para;', '')
@@ -139,6 +178,17 @@ class CodeItem(QTreeWidgetItem):
         return diff_html
 
     def pack(self, color_filter):
+        """Packs and filters this code item object.
+
+        Used before it gets cloned.
+        The clone function only supports QTreeWidgetItem data,
+        so we survive in the standard data(Qt.UserRole) in a dictionary.
+
+        :param color_filter: The color that is selected
+        :type color_filter: QBrush
+        :return: None
+        :rtype: None
+        """
         if color_filter:
             if not self.color == color_filter:
                 self.setHidden(True)
@@ -161,6 +211,20 @@ class CodeItem(QTreeWidgetItem):
 
     @staticmethod
     def unpack(item):
+        """Unpacks and filters this code item.
+
+        Used after it has been cloned and packed.
+        The clone function only supports QTreeWidgetItem data,
+        so we survive in the standard data member data.(Qt.UserRole)
+        in a dictionary. This is a static member to unpack
+        the resulting QTreeWidgetItem after cloning.
+
+        :param item: item to be unpacked
+        :type item: QTreeWidgetItem
+        :return: None
+        :rtype: None
+        """
+
         item.user_data = item.data(0, Qt.UserRole)
         item.chapter_name = item.user_data['chapter_name']
         item.object_name = item.user_data['object_name']
@@ -174,6 +238,16 @@ class CodeItem(QTreeWidgetItem):
         item.setHidden(item.user_data['hidden'])
 
     def set_gui(self, gui):
+        """Sets the gui type flag.
+
+        This function also resets the compare mode if it was there.
+
+        :param gui: mode flag
+        :type gui: int
+        :return: None
+        :rtype: None
+        """
+
         self.gui = gui
         if gui == GUI_SELECT:
             if self.mode & COMP_REPO:
@@ -183,20 +257,32 @@ class CodeItem(QTreeWidgetItem):
             self.set_compare_code('', 0)
 
     def suicide(self):
+        """Asks dad to shoot you.
+
+        Item gets pruned from the tree.
+        :return: None
+        :rtype: None
+        """
         self.parent().remove_child(self)
 
     def get_file_path(self, folder):
+        """Get the file path for this code item.
+
+        This function changes and slash, forward and backward into an underscore
+        Warning: this can potentially be dangerous if two uniquely named objects
+         turn out to have the same name after turning slashes to underscores.
+
+        :param folder: the folder in which code item resides
+        :type folder: Path
+        :return: Path
         """
 
-        :param folder:
-        :return:
-        """
-        file_name = path.join(folder, self.object_name.replace(' ', '_') + '.vql')
+        file_name = folder / (self.object_name.replace('/', '_').replace('\\', '_') + '.vql')
         return file_name
 
     def is_selected(self):
-        """
-        Is the object selected
+        """Is the object selected.
+
         :return: Boolean
         :rtype: bool
         """
@@ -206,39 +292,49 @@ class CodeItem(QTreeWidgetItem):
             return False
 
     def set_color(self, color):
-        """
-        Set the color
+        """Set the color.
+
         :param color:
         :type color: QBrush
-        :return:
+        :return: None
+        :rtype: None
         """
+
         self.color = color
         self.setForeground(0, color)
 
     def remove_compare(self):
+        """Function reverts the loading of compare code.
+
+        :return: None
+        :rtype: None
+        """
+
         if self.compare_code:
             if not self.code:
                 self.suicide()
         if self.code:
-            self.set_color(WHITE)
-            self.gui = GUI_SELECT
+            self.set_gui(GUI_SELECT)
+            self.set_color(WHITE) if self.dependees else self.set_color(RED)
             if self.compare_code:
-                self.compare_code = None
                 self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.code)
-                if self.mode & COMP_FILE:
-                    self.mode = self.mode - COMP_FILE
-                if self.mode & COMP_REPO:
-                    self.mode = self.mode - COMP_REPO
 
     @staticmethod
     def extract_denodo_folder_name_from_code(chapter_name, code):
-        folder_path = ''
-        if chapter_name == 'DATASOURCES':
-            if code.find('DATASOURCE LDAP') > 0:
-                return folder_path
-        if chapter_name in ['I18N MAPS', 'DATABASE', 'DATABASE CONFIGURATION', 'TYPES']:
-            return folder_path
-        if chapter_name == 'FOLDERS':
+        """Extracts the denodo folder name from code.
+
+        :param chapter_name: Type of denodo object
+        :type chapter_name: str
+        :param code: the code to create the object
+        :type code: str
+        :return: The denodo path
+        :rtype: str
+        """
+        if chapter_name == 'DATASOURCES' and code.find('DATASOURCE LDAP') > -1:
+                folder_path = ''
+        elif chapter_name in ['I18N MAPS', 'DATABASE', 'DATABASE CONFIGURATION', 'TYPES']:
+            folder_path = ''
+        elif chapter_name == 'FOLDERS':
             start = code.find('\'') + 2
             end = len(code) - 5
             folder_path = code[start:end]
@@ -246,24 +342,27 @@ class CodeItem(QTreeWidgetItem):
             start = code.find('FOLDER = \'') + 11
             end = code.find('\'', start)
             folder_path = code[start:end]
+
         if folder_path:
-            folder_path = folder_path.lower()
-            return folder_path
+            folder_path = Path(folder_path.lower())
+        else:
+            folder_path = None
+        return folder_path
 
     @staticmethod
     def extract_object_name_from_code(chapter_name, code):
-        """
+        """Searches for the Denodo object name.
+
         Helper function for the 'parse' function
-        The function searches for the Denodo object name to construct a unique file name in the repository
+        The function constructs a unique object name in its code
         Each chapter has its own way of extracting the object name
 
-        Warning!!
-        With newer versions of Denodo it should be checked if the structure they use is the same
+        Warning: With newer versions of Denodo it should be checked if the structure they use is the same
 
-        :param code: string with code relating to one object in Denodo
-        :type code: str
         :param chapter_name: string with the name of the chapter it belongs to
         :type chapter_name: str
+        :param code: string with code relating to one object in Denodo
+        :type code: str
         :return: string with the filename
         :rtype: str
         """
@@ -324,4 +423,3 @@ class CodeItem(QTreeWidgetItem):
             pass  # Todo: we don't use these kind of objects in Denodo
 
         return object_name
-

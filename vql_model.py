@@ -15,29 +15,28 @@ Last edited: November 2017
 """
 
 from vql_manager_core import *
-from PyQt5.QtCore import Qt, QBuffer, QIODevice
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QWidget, QTreeWidget, QAbstractItemView, QTreeWidgetItem
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget, QTreeWidget
 from chapter import Chapter
 from code_item import CodeItem
-from collections import OrderedDict
+from pathlib import Path
 
 
 class VqlModel(QTreeWidget):
-    """
-    VqlModel class represents all objects in a Denodo database
-    For example: ddp
-    The VqlModel class also represents a Repository file structure
-    The Chapter class is the owner/parent of the Chapter instances
-    It inherits from QTreeWidget, so it can display in a QMainWindow or QWidget
-    In this application it is instanced as: all_chapter_treeview
-    The purpose of this class is to make GUI based selections
+    """VqlModel class represents all objects in a Denodo database.
+
+    The VqlModel class also represents a Repository file structure.
+    The Chapter class is the owner/parent of the Chapter instances.
+    It inherits from QTreeWidget, so it can display in a QMainWindow or QWidget.
+    In this application it is instanced as: all_chapter_treeview.
+    The purpose of this class is to make GUI based selections.
     """
 
     def __init__(self, parent):
-        """
-        Constructor of the class
-        Mostly setting the stage for the display behavior of the QTreeWidget
+        """Constructor of the class.
+
+        Mostly setting the stage for the behavior of the QTreeWidget.
+
         :param parent: the object holding this instance, a central widget of the QMainWindow
         :type parent: QWidget
         """
@@ -60,11 +59,24 @@ class VqlModel(QTreeWidget):
         self.color_filter = None
 
     def pack(self):
+        """Packs all data of the tree into UserData of the QTreeWidgetItems.
+
+        :return: None
+        :rtype: None
+        """
         for chapter in self.chapters:
             chapter.pack(self.color_filter)
 
     @staticmethod
     def unpack(tree):
+        """Unpacks the data from QtreeWidgetItem's Userdata.
+
+        It also prunes the tree on checked items only with children
+        :param tree: The QtreeWidget to work on
+        :type tree: QtreeWidget
+        :return: None
+        :rtype: None
+        """
         deletes = list()
         for i in range(tree.topLevelItemCount()):
             child = tree.topLevelItem(i)
@@ -77,17 +89,28 @@ class VqlModel(QTreeWidget):
             tree.takeTopLevelItem(tree.indexOfTopLevelItem(child))
 
     def _add_chapters(self, chapter_names):
-        """
-        Adds chapters to the dict
+        """Method that adds a chapter to the chapter list for every name given.
+
         :param chapter_names: list of chapter_names of type string
         :type chapter_names: list
-        :return: nothing
+        :return: None
+        :rtype: None
         """
         for chapter_name in chapter_names:
             chapter = Chapter(self.root, chapter_name)
             self.chapters.append(chapter)
 
     def get_code_items(self, chapter_list=None):
+        """Generator to loop all code items.
+
+        Optionally a list with chapter names may be given as a filter.
+        Only chapter names in the lis are then included.
+
+        :param chapter_list: Optional list with chapter names
+        :type chapter_list: list
+        :return: Yields a tuple of chapter and code_item
+        :rtype: tuple(Chapter, CodeItem)
+        """
         if chapter_list:
             chapters = (chapter for chapter in self.chapters if chapter.name in chapter_list)
         else:
@@ -98,19 +121,24 @@ class VqlModel(QTreeWidget):
                 yield (chapter, code_item)
 
     def get_code_as_file(self, selected):
-        """
-        Generates the code content for a single .vql file of all checked items
+        """Function that puts the code content in a single .vql file of all checked/selected items.
+
         :return: string of code content
         :rtype: str
         """
+
         code = [chapter.get_code_as_file(selected) for chapter in self.chapters]
         return PROP_QUOTE + '\n'.join(code)
 
     def get_part_logs(self, folder):
-        """
-        Generator with log file names (key) and their content (values)
-        The content is a list of paths to the code items in a chapter
-        This function is used to create a repository
+        """Gives all part.log data.
+
+        With log file names (key) and their content (values).
+        The content is a list of paths to the code items in a chapter.
+        This function is used to create a repository.
+
+        :param folder: The folder to save the repo to
+        :type folder: Path
         :return: Iterator with filepaths and content
         :rtype: generator of tuples: part_log_filepath, part_log_content
         """
@@ -118,25 +146,28 @@ class VqlModel(QTreeWidget):
         return result
 
     def get_selected_code_files(self, folder):
-        """
-        Generator for looping over all selected code items in the model
+        """Function for looping over all selected code items in the model.
+
         This function is used to write the repository
+        :param folder: the proposed folder for storage
+        :type folder: Path
         :return: an iterator with two unpacked values: filepath and code content
-        :rtype: str, str
+        :rtype: list(tuple(Path, str)
         """
 
         item_path_code = list()
         for chapter in self.chapters:
             items = chapter.selected_items()
+            chapter_folder = folder / chapter.name
             for code_item in items:
-                item_path = code_item.get_file_path(chapter.get_file_path(folder))
+                item_path = code_item.get_file_path(chapter_folder)
                 item_code = code_item.code
                 item_path_code.append((item_path, item_code))
         return item_path_code
 
     def get_chapter_by_name(self, chapter_name):
-        """
-        Helper function: returns a chapter from the 'chapters' list by its name
+        """Function that returns a chapter from the 'chapters' list by its name.
+
         :param chapter_name: the name of the particular chapter requested
         :type chapter_name: str
         :return: A single chapter
@@ -149,6 +180,13 @@ class VqlModel(QTreeWidget):
         return chapter
 
     def switch_mode(self, new_mode):
+        """Method to switch mode on the tree item, sets appropriate headers and tooltips.
+
+        :param new_mode: The new mode
+        :type new_mode: int
+        :return: None
+        """
+
         if new_mode & GUI_NONE:
             self.setHeaderLabel('')
             self.setToolTip('No model loaded, Open a file or repository')
@@ -157,23 +195,20 @@ class VqlModel(QTreeWidget):
             self.setToolTip('Check the parts you like to select')
         elif new_mode & GUI_COMPARE:
             self.setHeaderLabel('Compare Pane')
-            pix_map = QPixmap('images/tooltip.png')
-            buffer = QBuffer()
-            buffer.open(QIODevice.WriteOnly)
-            pix_map.save(buffer, "PNG", quality=100)
-            image = bytes(buffer.data().toBase64()).decode()
-            html = '<img src="data:image/png;base64,{}">'.format(image)
-            self.setToolTip(html)
+            self.setToolTip('Select items')
             self.setToolTipDuration(1000)
 
     async def parse(self, file_content, mode):
-        """
-        Generator of parsed pieces of the vql file per Denodo object
-        :param file_content: the file to parse
+        """Method that parses the denodo export file.
+
+        It analyzes it to construct/fill the VqlModel tree.
+
+        :param file_content: String with the denodo file
         :type file_content: str
         :param mode: the application mode, selecting or comparing
         :param mode: int
-        :return: yields the following components: chapter_name, object_name, object_code, is_already_in_model, is_same
+        :return: None
+        :rtype: None
         """
 
         self.changed = False
@@ -243,9 +278,14 @@ class VqlModel(QTreeWidget):
         if gui & GUI_SELECT:
             for _, code_item in self.get_code_items():
                 if code_item.dependees:
-                    code_item.set_color = RED
+                    code_item.set_color(RED)
+            for chapter in self.chapters:
+                chapter.set_gui(gui)
+                chapter.set_color_based_on_children(gui, color=WHITE)
+                if chapter.childCount() == 0:
+                    chapter.setCheckState(0, UNCHECKED)
 
-        if gui & GUI_COMPARE:
+        elif gui & GUI_COMPARE:
             for _, code_item in self.get_code_items():
                 if code_item.color == RED:
                     code_item.setCheckState(0, UNCHECKED)
@@ -256,20 +296,57 @@ class VqlModel(QTreeWidget):
                     chapter.setCheckState(0, UNCHECKED)
 
     def get_dependencies(self, gui):
+        """Method with nifty code to extract en fill direct dependencies.
 
-        other_name_place_holder = '%&*&__&*&%'
+        Per code object upon other objects based on their vql code.
+        :param gui: mode flag selector indicating what code is done
+        :type gui: int
+        :return: None
+        :rtype: None
+        """
 
+        # place holder in search strings that is unlikely in the code
+        place_holder = '%&*&__&*&%'
+
+        # helper function
         def find_dependencies(_code_objects, _underlying_code_objects, _search_template, _gui):
+            """
+            Function finds and adds the direct dependencies of code objects
+            in the lower-cased code of underlying objects.
+            Basically it looks for the code_item's object name in the code of the underlying objects
+            via a particular search string per chapter type
+            :param _code_objects: a list of tuples (code object, object name, code)
+            :type _code_objects: list(tuple(CodeItem, str, str))
+            :param _underlying_code_objects: a list of tuples (code object, object name, code) of underlying objects
+            :type _underlying_code_objects: list(tuple(CodeItem, str, str))
+            :param _search_template: a template for the search string in which the object names can be put
+            :type _search_template: str
+            :param _gui: the mode of operation
+            :type _gui: int
+            :return: None
+            :rtype: None
+            """
+
             for code_object, code_object_name, code in _code_objects:
                 for other_code_item, other_name, other_code in _underlying_code_objects:
-                    search_string = _search_template.replace(other_name_place_holder, other_name)
+                    search_string = _search_template.replace(place_holder, other_name)
                     if not code.find(search_string) == -1:
                         if _gui & GUI_SELECT:
                             code_object.dependencies.append(other_code_item)
                         elif _gui & GUI_COMPARE:
                             code_object.compare_dependencies.append(other_code_item)
 
+        # helper function
         def code_items_lower(_code_object_chapter_name, _gui):
+            """
+            Returns a list of code items with their code and object names in lower case of a particular chapter
+            :param _code_object_chapter_name: the chapter name
+            :type _code_object_chapter_name: str
+            :param _gui: mode flag
+            :type _gui: int
+            :return: the requested list of tuples
+            :rtype: list(tuple(CodeItem, str, str))
+            """
             items = None
             if _gui & GUI_SELECT:
                 items = [(code_item, code_item.object_name.lower(), code_item.code.lower())
@@ -279,22 +356,35 @@ class VqlModel(QTreeWidget):
                          for code_item in self.get_chapter_by_name(_code_object_chapter_name).code_items]
             return items
 
-        searches = list()
-        searches.append(('WRAPPERS', 'DATASOURCES', 'datasourcename=' + other_name_place_holder))
-        searches.append(('BASE VIEWS', 'WRAPPERS', 'wrapper (jdbc ' + other_name_place_holder + ')'))
-        searches.append(('BASE VIEWS', 'WRAPPERS', 'wrapper (df ' + other_name_place_holder + ')'))
-        searches.append(('BASE VIEWS', 'WRAPPERS', 'wrapper (ldap ' + other_name_place_holder + ')'))
-        searches.append(('VIEWS', 'BASE VIEWS', 'from ' + other_name_place_holder))
-        searches.append(('VIEWS', 'VIEWS', 'from ' + other_name_place_holder))
-        searches.append(('ASSOCIATIONS', 'VIEWS', ' ' + other_name_place_holder + ' '))
+        # construct the searches in a list of tuples:
+        # 1 the items analysed
+        # 2 the underlying items
+        # 3 the search string template
 
+        searches = list()
+        searches.append(('WRAPPERS', 'DATASOURCES', f"datasourcename={place_holder}"))
+        searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (jdbc {place_holder})"))
+        searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (df ' {place_holder})"))
+        searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (ldap {place_holder})"))
+        searches.append(('VIEWS', 'BASE VIEWS', f"from {place_holder}"))
+        searches.append(('VIEWS', 'VIEWS', f"from {place_holder}"))
+        searches.append(('ASSOCIATIONS', 'VIEWS', f" {place_holder} "))
+
+        # perform the searches and store dependencies
         for code_object_chapter_name, underlying_code_object_chapter_name, search_template in searches:
             code_objects = code_items_lower(code_object_chapter_name, gui)
             underlying_code_objects = code_items_lower(underlying_code_object_chapter_name, gui)
-
             find_dependencies(code_objects, underlying_code_objects, search_template, gui)
 
     def get_dependees(self, gui):
+        """Method that fills the code item's dependees list.
+
+        Only direct dependees (objects that depend on this object) are stored.
+        :param gui: The mode flag of operation
+        :type gui: int
+        :return: None
+        :rtype: None
+        """
 
         for chapter, item in self.get_code_items():
             # make unique
@@ -329,40 +419,79 @@ class VqlModel(QTreeWidget):
 
     @staticmethod
     def unique_list(_list):
+        """Function that turns a list into a list with unique items.
+
+        Keeping the sort order.
+
+        :param _list: the list to make unique
+        :type _list: list
+        :return: the list made unique
+        :rtype: list
+        """
         new_list = list()
         for item in _list:
             if item not in new_list:
                 new_list.append(item)
         return new_list
 
-    def change_view(self, new_view, mode):
+    def change_view(self, mode):
+        """Method that swaps the tree items from VQL View to Denodo file structure view and back.
+
+        The actual switch is done in switch_view function.
+        This function handles the surrounding aspects.
+
+        :param mode: the mode flag with bits for the new view either VQL_VIEW or DENODO_VIEW
+        :type mode: int
+        :return: None
+        :rtype: None
+        """
+
         gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)
-        if self.view & new_view:
+        if self.view & mode:
             return
 
-        if new_view == VQL_VIEW:
+        if mode & VQL_VIEW:
             if self.storage_list:
                 self.switch_view()
                 self.view = VQL_VIEW
             else:
                 # build a VQL_View
                 pass
-        elif new_view & DENODO_VIEW:
+        elif mode & DENODO_VIEW:
             if self.storage_list:
                 self.switch_view()
                 self.view = DENODO_VIEW
             else:
                 # build denodo view
                 self.build_denodo_view(gui)
-                self.change_view(new_view, gui)
+                self.change_view(mode)
 
     def switch_view(self):
+        """Method to switch view between VQL or Denodo file structure.
+
+        Store the children of the root item of the tree widget
+        and replace them with the stored ones.
+        :return: None
+        :rtype: None
+        """
+
         temp = self.root.takeChildren()
         self.root.addChildren(self.storage_list)
         self.storage_list = temp
 
     def build_denodo_view(self, gui):
-        folders = OrderedDict()
+        """Method that builds up the Denodo folder structure.
+
+        Using chapter items as folders and adds code_items as children.
+        This structure is stored in the storage list
+        and shown when the view is switched.
+        :param gui: flag to indicate compare or normal select operations
+        :type gui: int
+        :return: None
+        :rtype: none
+        """
+
+        folders = dict()
         self.pack()
         # get the list of folders and all code items in them
         for chapter, code_item in self.get_code_items():
@@ -411,5 +540,11 @@ class VqlModel(QTreeWidget):
         self.storage_list = temp_root.takeChildren()
 
     def remove_compare(self):
+        """Method to remove compare code .
+
+        It resets the items as if still in the GUI_SELECT state.
+        :return: None
+        :rtype: None
+        """
         for _, item in self.get_code_items():
             item.remove_compare()

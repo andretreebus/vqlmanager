@@ -13,7 +13,8 @@ Last edited: November 2017
 """
 
 from PyQt5.QtCore import Qt, QObject, Q_FLAGS
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtGui import QBrush
+from PyQt5.QtGui import QColor
 from diff_match_patch import diff_match_patch
 
 COMPANY = 'www.erasmusmc.nl'
@@ -32,10 +33,10 @@ PANE_WIDTH = 300
 # # application modes en flags
 
 # colors used
-red = "#ff4444"
-green = "#44ff44"
-yellow = "#ffff44"
-white = "#cccccc"
+red = '#ff4444'
+green = '#44ff44'
+yellow = '#ffff44'
+white = '#cccccc'
 
 RED = QBrush(QColor(red))
 GREEN = QBrush(QColor(green))
@@ -48,6 +49,8 @@ ITEM_FLAG_CHAPTER = Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristat
 ITEM_FLAG_CODE_ITEM = Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
 ITEM_FLAG_SEL = Qt.ItemIsSelectable | Qt.ItemIsEnabled
 
+
+LOG_FILE_NAME = 'part.log'
 
 # main chapter names as used in Denodo code
 CHAPTER_NAMES = ['I18N MAPS', 'DATABASE', 'FOLDERS', 'LISTENERS JMS', 'DATASOURCES', 'WRAPPERS',
@@ -227,4 +230,3 @@ diff_engine.Diff_Timeout = 2
 diff_engine.Match_Threshold = 0.0
 diff_engine.Patch_DeleteThreshold = 0.0
 diff_engine.Match_MaxBits = 0
-

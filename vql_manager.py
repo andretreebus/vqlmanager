@@ -24,8 +24,12 @@ app = None
 
 
 def main():
-    # Boilerplate python code to start and end the application
-    # and allows it to be in a module or library
+    """Main entry point for the application
+
+    Boilerplate python code to start and end the application and allows it to be in a module or library
+    :return:
+    """
+
     global app
 
     app = QApplication(argv)

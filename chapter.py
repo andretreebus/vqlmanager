@@ -20,7 +20,7 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
 
-from os import path
+# from os import path
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QTreeWidgetItem
 from code_item import CodeItem
@@ -28,17 +28,17 @@ from vql_manager_core import *
 
 
 class Chapter(QTreeWidgetItem):
-    """
-    Chapter class represents a group of Denodo objects of the same kind
-    For example: a BASEVIEW or a ASSOCIATION etc
-    The Chapter class also represents a folder in the repository
-    The Chapter class is the owner/parent of the CodeItems
-    It inherits from QTreeWidgetItem, so it can display in a QTreeWidget
+    """Chapter class represents a group of Denodo objects of the same kind.
+
+    For example: a BASEVIEW or a ASSOCIATION etc.
+    The Chapter class also represents a folder in the repository.
+    The Chapter class is the owner/parent of the CodeItems.
+    It inherits from QTreeWidgetItem, so it can display in a QTreeWidget.
     """
 
     def __init__(self, parent, name):
-        """
-        Initializer of the class objects
+        """Initializer of the class objects
+
         :param parent: reference to the parent or owner, this should be a VqlModel class (QTreeWidget)
         :type parent: VqlModel
         :param name: string name of the chapter
@@ -63,13 +63,24 @@ class Chapter(QTreeWidgetItem):
     # General functions
 
     def pack(self, color_filter):
+        """Packs and filters this chapter object and its code_item children.
+
+        Used before it gets cloned.
+        The clone function only supports QTreeWidgetItem data,
+        so we survive in the standard data(Qt.UserRole) in a dictionary.
+
+        :param color_filter: The color that is selected
+        :type color_filter: QBrush
+        :return: None
+        :rtype: None
+        """
+
         self.user_data['name'] = self.name
         self.user_data['header'] = self.header
         self.user_data['code_items'] = self.code_items
         self.user_data['chapter_items'] = self.chapter_items
         self.user_data['parent_chapter_name'] = self.parent_chapter_name
         self.user_data['color'] = self.color
-        # self.user_data['check_state'] = self.checkState(0)
         self.user_data['gui'] = self.gui
         self.user_data['class_type'] = self.class_type
         self.user_data['selected'] = self.is_selected()
@@ -85,6 +96,20 @@ class Chapter(QTreeWidgetItem):
 
     @staticmethod
     def unpack(item):
+        """Unpacks and filters this chapter object and its code_item children.
+
+        Used after it has been cloned and packed,
+        The clone function only supports QTreeWidgetItem data,
+        so we survive in the standard data member data.(Qt.UserRole)
+        in a dictionary
+        This is a static member to unpack the resulting QTreeWidgetItem after cloning
+
+        :param item: item to be unpacked
+        :type item: QTreeWidgetItem
+        :return: None
+        :rtype: None
+        """
+
         item.user_data = item.data(0, Qt.UserRole)
         item.name = item.user_data['name']
         item.header = item.user_data['header']
@@ -119,8 +144,8 @@ class Chapter(QTreeWidgetItem):
 
     @staticmethod
     def make_header(chapter_name):
-        """
-        Constructs a string that can be used to identify chapters in a Denodo exported database file
+        """Constructs a string that can be used to identify chapters in a Denodo exported database file.
+
         :param chapter_name: string with Chapter name
         :type chapter_name: str
         :return: The chapter Header
@@ -131,6 +156,13 @@ class Chapter(QTreeWidgetItem):
         return chapter_header
 
     def set_gui(self, gui):
+        """Sets the Gui type (GUI_SELECT GUI_COMPARE) on the chapter and its children.
+
+        :param gui: the new GUI type
+        :type gui: int
+        :return:None
+        :rtype: None
+        """
         self.gui = gui
         for chapter in self.chapter_items:
             chapter.set_gui(gui)
@@ -138,6 +170,15 @@ class Chapter(QTreeWidgetItem):
             code_item.set_gui(gui)
 
     def set_color_based_on_children(self, mode, color=None):
+        """Sets the color of chapters based on the non hidden children.
+
+        :param mode: the mode of the gui
+        :type mode: int
+        :param color: Optional parameter to set the color only
+        :type color: QBrush
+        :return: None
+        :rtype: None
+        """
         if color:
             self.set_color(color)
             return
@@ -159,8 +200,8 @@ class Chapter(QTreeWidgetItem):
             self.set_color(YELLOW)
 
     def set_color(self, color):
-        """
-        Set the color
+        """Set the color of this item.
+
         :param color:
         :type color: QBrush
         :return:
@@ -169,6 +210,13 @@ class Chapter(QTreeWidgetItem):
         self.setForeground(0, color)
 
     def get_code_item_by_object_name(self, object_name):
+        """Returns a tuple of a code item child and the index it has.
+
+        :param object_name: The object name of the CodeItem
+        :type object_name: str
+        :return: The tuple of index and code item object itself
+        :rtype: tuple(int, CodeItem)
+        """
         if object_name:
             for index, code_item in enumerate(self.code_items):
                 if code_item:
@@ -177,8 +225,8 @@ class Chapter(QTreeWidgetItem):
         return 0, None
 
     def is_selected(self):
-        """
-        Function returns if the chapter is selected or has some code items selected (tri state)
+        """Function returns if the chapter is selected or has some code items selected (tri state).
+
         :return: Boolean
         :rtype: bool
         """
@@ -187,15 +235,13 @@ class Chapter(QTreeWidgetItem):
         else:
             return False
 
-    def get_file_path(self, folder):
-        return path.normpath(path.join(folder, self.name.replace(' ', '_')))
-
     # export functions
     # to file
     def get_code_as_file(self, selected):
-        """
-        Function returns the combined Denodo code from a whole chapter.
-        This function does not add a chapter header
+        """Returns the combined Denodo code for a whole chapter.
+
+        This function adds a chapter header, and only selected code items
+
         :param selected: Indicator is True if only selected items are requested
         :type selected: bool
         :return: string with code content
@@ -208,27 +254,30 @@ class Chapter(QTreeWidgetItem):
         return self.header + '\n'.join(code)
 
     # to repository
-    def get_part_log(self, folder):
-        """
-        Function returning two values: the file path for the part.log file and its content as a string
-        The content is a list of file paths pointing to the code items in this chapter
-        The part.log files are used in a repository to ensure the same order of execution
-        Only the selected code items are included
-        :return: Two values, a file path and the content of the part.log file of this chapter
-        :rtype: str, str
-        """
+    def get_part_log(self, base_path):
+        """Returns data to write the part.log files.
 
-        sub_folder = self.get_file_path(folder)
-        part_log_filepath = path.normpath(path.join(sub_folder, 'part.log'))
-        part_log = [code_item.get_file_path(sub_folder) for code_item in self.code_items if code_item.is_selected()]
+        Returning two values: the file path for the part.log file and its content as a string.
+        The content is a list of file paths pointing to the code items in this chapter.
+        The part.log files are used in a repository to ensure the same order of execution.
+        Only the selected code items are included.
+
+        :param: base_path: The base folder for the repo
+        :type: Path
+        :return: Two values, a file path and the content of the part.log file of this chapter
+        :rtype: tuple Path, str
+        """
+        folder = base_path / self.name
+        part_log_filepath = folder / LOG_FILE_NAME
+        part_log = [str(code_item.get_file_path(folder)) for code_item in self.code_items if code_item.is_selected()]
         part_log_content = '\n'.join(part_log)
         return part_log_filepath, part_log_content
 
     def selected_items(self):
-        """
-        Generator for looping over selected code items
-        :return: Iterator
-        :rtype: CodeItem
+        """Function for looping over selected code items.
+
+        :return: list with items
+        :rtype: list(CodeItem)
         """
         items = list()
         for code_item in self.code_items:
