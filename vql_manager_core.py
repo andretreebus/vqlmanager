@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
-VQL_Constants Class
+VQL_Constants and globals
 Several shared objects in the VQL Manager app
 
 file: vql_manager_core.py
@@ -13,12 +13,35 @@ Last edited: November 2017
 """
 
 from PyQt5.QtCore import Qt, QObject, Q_FLAGS
-from PyQt5.QtGui import QBrush
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QBrush, QColor
 from diff_match_patch import diff_match_patch
+import logging
+from pathlib import Path
 
+# registry data
 COMPANY = 'www.erasmusmc.nl'
 APPLICATION_NAME = 'VQL Manager'
+
+# setup logger
+LOGGING_LEVEL = logging.DEBUG
+LOGGING_FORMAT = "%(levelname)s %(asctime)s - %(message)s "
+script_path = Path(__file__).parent.resolve()
+log_filename = script_path / 'log' / 'vql_manager.log'
+log_dir = log_filename.parent
+if not log_dir.is_dir():
+    try:
+        log_dir.mkdir()
+    except (OSError, IOError) as e:
+        print('Could not create log directory: ' + str(log_filename.parent))
+
+if not log_filename.is_file():
+    try:
+        log_filename.touch()
+    except (OSError, IOError) as e:
+        print('Could not create logfile: ' + str(log_filename))
+
+logging.basicConfig(filename=log_filename, level=LOGGING_LEVEL, format=LOGGING_FORMAT, filemode='w')
+logger = logging.getLogger('vql_manager')
 
 # class VqlConstants(QObject):
 # convenience names for class constants
@@ -81,9 +104,13 @@ class ModelState(QObject):
     COMP_LOADED = 1 << 9      # indicate that the compare model is loaded
 
 
+# class SourceType(QObject):
+#     FILE = 1 << 10
+#     REPO = 1 << 11
+
 class SourceType(QObject):
-    FILE = 1 << 10
-    REPO = 1 << 11
+    FILE = ModelState.BASE_FILE | ModelState.COMP_FILE
+    REPO = ModelState.BASE_REPO | ModelState.COMP_REPO
 
 
 class ViewType(QObject):
@@ -159,10 +186,12 @@ def translate_colors(item_color, to_text=True):
 
 
 def show_mode(mode):
-    """
+    """Returns debug info string to logger.
 
-    :param mode:
-    :return:
+    :param mode: the mode to show
+    :type mode: int
+    :return: a human readable string with flags
+    :rtype: str
     """
     gui_types = {GUI_NONE: 'GUI_NONE', GUI_SELECT: 'GUI_SELECT', GUI_COMPARE: 'GUI_COMPARE'}
     model_states = {BASE_FILE: 'BASE_FILE', BASE_REPO: 'BASE_REPO', COMP_FILE: 'COMP_FILE', COMP_REPO: 'COMP_REPO',

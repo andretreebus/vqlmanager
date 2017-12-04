@@ -18,6 +18,7 @@ Last edited: November 2017
 from sys import exit, argv
 from PyQt5.QtWidgets import QApplication
 from vqlmanagerwindow import VQLManagerWindow
+from vql_manager_core import logger
 import qdarkstyle
 
 app = None
@@ -29,7 +30,7 @@ def main():
     Boilerplate python code to start and end the application and allows it to be in a module or library
     :return:
     """
-
+    logger.info("Entering main")
     global app
 
     app = QApplication(argv)

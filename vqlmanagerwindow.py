@@ -42,7 +42,7 @@ class VQLManagerWindow(QMainWindow):
         :type parent: Qt.Window
         :rtype: None
         """
-
+        logger.info("Start Window creation")
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
         self.setAttribute(Qt.WA_DeleteOnClose)  # close children on exit
@@ -57,16 +57,17 @@ class VQLManagerWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(images / 'splitter.png')))
         self.setWindowTitle(APPLICATION_NAME)
 
-        select_button_labels = [('All', white), ('Lost', red), ('New', green), ('Same', white), ('Changed', yellow)]
-        diff_button_labels = [('Original', white), ('New', green), ('Changes', yellow)]
+        self.select_button_labels = dict([('All', white), ('Lost', red),
+                                          ('New', green), ('Same', white), ('Changed', yellow)])
+        self.diff_button_labels = dict([('Original', white), ('New', green), ('Changes', yellow)])
 
         # instantiate widgets
         self.mainwidget = QWidget(self, flags=Qt.Widget)
         self.layout = QGridLayout(self.mainwidget)
 
         # create radio buttons
-        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, select_button_labels)
-        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, diff_button_labels)
+        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, self.select_button_labels)
+        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, self.diff_button_labels)
 
         # create tree widgets VqlModel(self.mainwidget)
         self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
@@ -173,6 +174,7 @@ class VQLManagerWindow(QMainWindow):
         self.switch_to_mode(GUI_NONE)
         self.code_show_selector = ORIGINAL_CODE
         self.code_text_edit_cache = None
+        logger.info("Finished Window creation")
 
     @staticmethod
     def create_tree_widget(parent, class_type, flags, header=None, tooltip=None):
@@ -266,6 +268,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.debug("Start setup window ui")
         self.layout.setContentsMargins(23, 23, 23, 23)
         self.layout.setSpacing(8)
 
@@ -431,6 +434,7 @@ class VQLManagerWindow(QMainWindow):
 
         # connect update timer
         self.update_timer.timeout.connect(self.update_tree_widgets)
+        logger.debug("Finished setup window ui")
 
     def update_recent_file_actions(self):
         """Upates the Action objects in the menu to reflect the recent file storage.
@@ -502,7 +506,7 @@ class VQLManagerWindow(QMainWindow):
             return items
 
     @staticmethod
-    def get_buttons_widget(main_widget, button_list):
+    def get_buttons_widget(main_widget, button_dict):
         """Constructs a series of related radio buttons used to filter CodeItems.
 
         :param main_widget: the parent widget
@@ -516,13 +520,15 @@ class VQLManagerWindow(QMainWindow):
         widget = QWidget(main_widget)  # central widget
         widget.setLayout(layout)
         group = QButtonGroup(widget)  # Number group
-        for i, label_color in enumerate(button_list):
-            btn = QRadioButton(label_color[0])
-            btn.setStyleSheet("color: " + label_color[1])
-            if i == 0:
+        first_button = True
+        for text, label_color in button_dict.items():
+            btn = QRadioButton(text)
+            btn.setStyleSheet("color: " + label_color)
+            if first_button:
                 btn.setChecked(True)
+                first_button = False
             group.addButton(btn)
-            layout.addWidget(btn, 0, Qt.AlignLeft,)
+            layout.addWidget(btn, 0, Qt.AlignLeft)
         return widget, group
 
     def get_mode(self):
@@ -539,7 +545,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-
+        logger.debug("Starting setting mode: " + show_mode(new_mode))
         if new_mode & GUI_NONE or new_mode == 0:
             self.mode_label.setText('View Mode: None')
             self.base_repository_label.setText('No file loaded')
@@ -570,7 +576,8 @@ class VQLManagerWindow(QMainWindow):
 
         self.all_chapters_treeview.switch_mode(new_mode)
         self._mode = new_mode
-        self.statusBar.showMessage(show_mode(self._mode))
+        # self.statusBar.showMessage(show_mode(self._mode))
+        logger.debug("Finished setting mode: " + show_mode(self._mode))
 
     # Event handlers for opening and saving models
 
@@ -588,9 +595,9 @@ class VQLManagerWindow(QMainWindow):
         :rtype: None
         """
 
-        if mode & (BASE_FILE | COMP_FILE):
+        if mode & FILE:
             file_list = RECENT_FILES
-        elif mode & (BASE_REPO | COMP_REPO):
+        elif mode & REPO:
             file_list = RECENT_REPOSITORIES
         else:
             return
@@ -611,19 +618,8 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-
-        text = button.text()
-        tree = self.all_chapters_treeview
-        if text == 'All':
-            tree.color_filter = None
-        elif text == 'Lost':
-            tree.color_filter = RED
-        elif text == 'New':
-            tree.color_filter = GREEN
-        elif text == 'Same':
-            tree.color_filter = WHITE
-        elif text == 'Changed':
-            tree.color_filter = YELLOW
+        color = translate_colors(self.select_button_labels[button.text()], to_text=False)
+        self.all_chapters_treeview.color_filter = color
         self.update_tree_widgets()
 
     def on_diff_buttons_clicked(self, button):
@@ -637,7 +633,6 @@ class VQLManagerWindow(QMainWindow):
         """
 
         text = button.text()
-
         if text == 'Original':
             self.code_show_selector = ORIGINAL_CODE
         elif text == 'New':
@@ -657,14 +652,14 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-
+        logger.info(f"Open file or repository {load_path if load_path else ''} in mode: {show_mode(new_mode)} mode.")
         file = None
         folder = None
 
         if load_path:
-            if new_mode & (BASE_FILE | COMP_FILE):
+            if new_mode & FILE:
                     file = Path(load_path)
-            elif new_mode & (BASE_REPO | COMP_REPO):
+            elif new_mode & REPO:
                     folder = Path(load_path)
             else:
                 return
@@ -713,6 +708,7 @@ class VQLManagerWindow(QMainWindow):
                         folder = self.ask_repository_open()
                     if folder:
                         self.run(self.load_model_from_repository(folder, COMP_REPO | GUI_COMPARE))
+        logger.info("File or repository loaded.")
 
     def on_right_click(self, pos):
         """Event handler for the right click event on the all_chapter_treeview widget.
@@ -751,6 +747,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.info(f"Saving file or repository in {show_mode(save_mode)} mode.")
         current_mode = self.get_mode()
         if not current_mode & BASE_LOADED:
             self.message_to_user("No repository loaded yet")
@@ -760,10 +757,12 @@ class VQLManagerWindow(QMainWindow):
             file = self.ask_file_save()
             if file:
                 self.run(self.save_model_to_file(file))
+                logger.info(f"{file} saved.")
         elif save_mode & REPO:
             folder = self.ask_repository_save()
             if folder:
                 self.run(self.save_model_to_repository(folder))
+                logger.info(f"{folder} saved.")
 
     def on_reset(self):
         """Event handler to reset everything.
@@ -774,6 +773,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.info('Application restart.')
         settings = QSettings(COMPANY, APPLICATION_NAME)
         settings.clear()
 
@@ -795,6 +795,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.debug('Item clicked on Selection Pane: ' + item.text(0))
         self.all_chapters_treeview.changed = True
         self.update_timer.start(100)
 
@@ -812,6 +813,7 @@ class VQLManagerWindow(QMainWindow):
         if item:
             item_data = item.data(col, Qt.UserRole)
             if item_data['class_type'] == CodeItem:
+                logger.debug('CodeItem clicked on View Pane: ' + item.text())
                 cache = dict()
                 cache['object_name'] = item_data['object_name']
                 cache['code'] = item_data['code']
@@ -876,11 +878,14 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+
         if self._mode & BASE_LOADED:
             if self.denodo_folder_structure_action.isChecked():
+                logger.debug('Switching view to Denodo View')
                 self.denodo_folder_structure_action.setText('Switch to VQL View')
                 self.all_chapters_treeview.change_view(self._mode | DENODO_VIEW)
             else:
+                logger.debug('Switching view to VQL View')
                 self.denodo_folder_structure_action.setText('Switch to DENODO View')
                 self.all_chapters_treeview.change_view(self._mode | VQL_VIEW)
             self.update_tree_widgets()
@@ -893,7 +898,7 @@ class VQLManagerWindow(QMainWindow):
         :return: filepath
         :rtype: Path
         """
-
+        logger.info('Asking file to open.')
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptOpen)
         dialog.setDefaultSuffix('vql')
@@ -920,6 +925,7 @@ class VQLManagerWindow(QMainWindow):
             self.message_to_user("This file has the wrong extension")
             return ''
 
+        logger.info('Got: ' + str(filename))
         return filename
 
     def ask_repository_open(self):
@@ -928,7 +934,7 @@ class VQLManagerWindow(QMainWindow):
         :return: the folder path
         :rtype: Path
         """
-
+        logger.info('Asking repository to open.')
         open_path = str(self.working_folder if self.working_folder else Path.cwd())
 
         dialog = QFileDialog(self)
@@ -944,6 +950,7 @@ class VQLManagerWindow(QMainWindow):
         if not folder.is_dir():
             self.message_to_user("No folder found")
             return None
+        logger.info('Got:' + str(folder))
         return folder
 
     def ask_repository_save(self):
@@ -954,6 +961,7 @@ class VQLManagerWindow(QMainWindow):
         :return: Folder to store the repository
         :rtype: Path
         """
+        logger.info('Asking repository to save.')
         open_path = str(self.working_folder if self.working_folder else Path.cwd())
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptSave)
@@ -975,6 +983,7 @@ class VQLManagerWindow(QMainWindow):
         if any([item_path.exists() for item_path, _ in self.all_chapters_treeview.get_selected_code_files(folder)]):
             if not self.ask_overwrite():
                 return None
+        logger.info('Got:' + str(folder))
         return folder
 
     def ask_file_save(self):
@@ -985,6 +994,7 @@ class VQLManagerWindow(QMainWindow):
         :return: the file path of the file to be written
         :rtype: Path
         """
+        logger.info('Asking file to save.')
         open_path = str(self.working_folder if self.working_folder else Path.cwd())
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptSave)
@@ -1003,6 +1013,7 @@ class VQLManagerWindow(QMainWindow):
                 return None
             else:
                 filename.unlink()
+        logger.info('Got:' + str(filename))
         return filename
 
     # General purpose dialogs
@@ -1013,6 +1024,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.debug('Message to user: ' + message)
         msg = QMessageBox(self)
         msg.setWindowTitle("You got a message!")
         msg.setIcon(QMessageBox.Question)
@@ -1074,12 +1086,13 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.error(title + str(e))
         msg = QMessageBox(self)
         msg.setWindowTitle(title)
         msg.setIcon(QMessageBox.Critical)
         msg.setText("<strong>An error has occurred!<strong>")
         msg.setInformativeText(text)
-        msg.setDetailedText(e)
+        msg.setDetailedText(str(e))
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setDefaultButton(QMessageBox.Ok)
         msg.exec()
@@ -1089,18 +1102,20 @@ class VQLManagerWindow(QMainWindow):
     async def read_file(self, file):
         """General function to read in a file
 
-
         :param file: The path to the file
         :type file: Path
         :return: The contents of the file as string
         :rtype: str
         """
+        logger.debug('Reading: ' + str(file))
         content = None
         try:
             with file.open() as f:
                 content = f.read()
         except (OSError, IOError) as e:
             self.error_message_box("Error", "An error occurred during reading of file: " + str(file), e)
+        if content:
+            logger.debug(f"{str(file)} with {len(content)} characters read.")
         return content
 
     async def write_file(self, file, content):
@@ -1113,6 +1128,7 @@ class VQLManagerWindow(QMainWindow):
         :return: Boolean on success
         :rtype: bool
         """
+        logger.debug('Saving: ' + str(file))
         if file.is_file():
             try:
                 file.unlink()
@@ -1123,7 +1139,8 @@ class VQLManagerWindow(QMainWindow):
 
         try:
             with file.open(mode='x') as f:
-                f.write(content)
+                written = f.write(content)
+                logger.debug(f"Saved {written} characters to {str(file)}")
                 return True
         except (OSError, IOError) as e:
             self.error_message_box("Error", "An error occurred during writing of file: " + str(file), e)
@@ -1141,8 +1158,8 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-
-        self.statusBar.showMessage("Loading model")
+        logger.debug(f"Loading model from file in {show_mode(new_mode)} mode")
+        self.statusBar.showMessage("Loading model from file.")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         tree = self.all_chapters_treeview
         content = await self.read_file(file)
@@ -1169,6 +1186,7 @@ class VQLManagerWindow(QMainWindow):
         self.working_folder = file.resolve().parent
         self.add_to_recent_files(file, FILE)
         QApplication.restoreOverrideCursor()
+        logger.debug(f"Loading model from file finished.")
 
     async def load_model_from_repository(self, folder, new_mode):
         """Loads a repository folder structure into the VqlModel instance.
@@ -1179,6 +1197,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.debug(f"Loading model from repository in {show_mode(new_mode)} mode")
 
         self.statusBar.showMessage("Loading model")
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -1187,9 +1206,10 @@ class VQLManagerWindow(QMainWindow):
         possible_folders = {folder / sub_folder for sub_folder in CHAPTER_NAMES}
         matching_folders = existing_folders & possible_folders
         if not matching_folders:
-            self.message_to_user("No sub folders found")
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            self.statusBar.showMessage("No models found")
+            message = "No repository found. Did not find any matching sub folders."
+            self.message_to_user(message)
+            self.statusBar.showMessage(message)
             return
 
         part_files = [folder / sub_folder / LOG_FILE_NAME
@@ -1247,6 +1267,7 @@ class VQLManagerWindow(QMainWindow):
         self.add_to_recent_files(folder, REPO)
         QApplication.restoreOverrideCursor()
         self.statusBar.showMessage("Model Loaded")
+        logger.debug(f"Repository loaded with new mode {show_mode(self._mode)}")
 
     async def save_model_to_file(self, file):
         """Saves the single .vql file.
@@ -1256,6 +1277,7 @@ class VQLManagerWindow(QMainWindow):
         :return: boolean on success
         :rtype: bool
         """
+        logger.debug(f"Saving model to file in {file}")
         tree = self.all_chapters_treeview
 
         self.statusBar.showMessage("Saving")
@@ -1265,9 +1287,11 @@ class VQLManagerWindow(QMainWindow):
         if content:
             if await self.write_file(file, content):
                 self.statusBar.showMessage("Ready")
+                logger.debug("Saved OK")
                 return True
             else:
                 self.statusBar.showMessage("Save error")
+                logger.debug("Not Saved")
                 return False
 
     async def save_model_to_repository(self, folder):
@@ -1279,6 +1303,7 @@ class VQLManagerWindow(QMainWindow):
         :return: boolean on success
         :rtype bool
         """
+        logger.debug(f"Saving model to repository in folder {folder}")
         self.statusBar.showMessage("Saving")
         if not folder:
             self.statusBar.showMessage("Save Error")
@@ -1300,6 +1325,7 @@ class VQLManagerWindow(QMainWindow):
             sub_folder = part_log_filepath.parent
             if not sub_folder.is_dir():
                 try:
+                    logger.debug("Creating Directory.")
                     sub_folder.mkdir(parents=True)
                 except (OSError, IOError) as e:
                     self.statusBar.showMessage("Save Error")
@@ -1309,21 +1335,26 @@ class VQLManagerWindow(QMainWindow):
 
             if not await self.write_file(part_log_filepath, part_log_content):
                 self.statusBar.showMessage("Save Error")
+                logger.debug("Saved not OK")
                 return False
 
         for file_path, content in tree.get_selected_code_files(folder):
             if not content:
                 self.statusBar.showMessage("Save Error")
+                logger.debug("Saved not OK")
                 return False
             if not file_path:
                 self.statusBar.showMessage("Save Error")
+                logger.debug("Saved not OK")
                 return False
             if not await self.write_file(file_path, content):
                 self.statusBar.showMessage("Save Error")
+                logger.debug("Saved not OK")
                 return False
 
         tree.blockSignals(False)
         self.statusBar.showMessage("Ready")
+        logger.debug("Saved OK")
         return True
 
     def add_to_recent_files(self, file_path, mode):
@@ -1336,8 +1367,12 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-
+        logger.debug(f"Adding {file_path} to recent file list in {show_mode(mode)} mode")
         settings = QSettings(COMPANY, APPLICATION_NAME)
+
+        if not settings:
+            logger.debug("No resent file settings found.")
+            return
 
         if mode & FILE:
             settings_list = RECENT_FILES
@@ -1345,6 +1380,7 @@ class VQLManagerWindow(QMainWindow):
             settings_list = RECENT_REPOSITORIES
         else:
             return
+
         paths = settings.value(settings_list, type=list)
         file = str(file_path)
         if file in paths:
@@ -1355,6 +1391,7 @@ class VQLManagerWindow(QMainWindow):
         settings.setValue(settings_list, paths)
 
         self.update_recent_file_actions()
+        logger.debug("Path added to recent files or folders.")
 
     def show_code_text(self):
         """Shows the code of the clicked CodeItem in the Code edit widget.
@@ -1400,6 +1437,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        logger.debug('Update_tree_widgets')
         # stop the update timer
         self.update_timer.stop()
         # store former "blocked" indicator
@@ -1412,7 +1450,6 @@ class VQLManagerWindow(QMainWindow):
         col = 0
         tree_sel = self.selected_treeview
         root_sel = tree_sel.invisibleRootItem()
-        # root_sel.setFlags(ITEM_FLAG_SEL)
 
         tree_all = self.all_chapters_treeview
         root_all = tree_all.invisibleRootItem()

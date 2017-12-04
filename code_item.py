@@ -65,7 +65,7 @@ class CodeItem(QTreeWidgetItem):
         self.compare_code = compare_code
         self.object_name = ''
         self.denodo_folder = ''
-        self.color = WHITE
+        self.set_color(WHITE)
         self.gui = GUI_SELECT
         self.dependencies = list()
         self.dependees = list()
@@ -87,6 +87,7 @@ class CodeItem(QTreeWidgetItem):
         if mode & (COMP_FILE | COMP_REPO):
             self.compare()
         self.pack(None)
+        logger.debug(f">>>> CodeItem: {self.object_name if self.object_name else '_'} created.")
 
     def set_compare_code(self, compare_code, mode):
         """Setter for the compare mode and code.

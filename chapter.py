@@ -44,6 +44,7 @@ class Chapter(QTreeWidgetItem):
         :param name: string name of the chapter
         :type name: str
         """
+
         super(Chapter, self).__init__(parent)
         self.user_data = dict()
         self.setCheckState(0, CHECKED)
@@ -56,9 +57,10 @@ class Chapter(QTreeWidgetItem):
         self.code_items = list()
         self.chapter_items = list()
         self.parent_chapter_name = ''
-        self.color = WHITE
+        self.set_color(WHITE)
         self.gui = GUI_SELECT
         self.pack(None)
+        logger.debug(f">> Chapter: {self.name} created.")
 
     # General functions
 

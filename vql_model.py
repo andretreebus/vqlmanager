@@ -210,7 +210,7 @@ class VqlModel(QTreeWidget):
         :return: None
         :rtype: None
         """
-
+        logger.debug('Start parsing data.')
         self.changed = False
         gui = GUI_NONE
 
@@ -295,6 +295,8 @@ class VqlModel(QTreeWidget):
                 if chapter.childCount() == 0:
                     chapter.setCheckState(0, UNCHECKED)
 
+        logger.debug('Finished parsing data.')
+
     def get_dependencies(self, gui):
         """Method with nifty code to extract en fill direct dependencies.
 
@@ -309,7 +311,7 @@ class VqlModel(QTreeWidget):
         place_holder = '%&*&__&*&%'
 
         # helper function
-        def find_dependencies(_code_objects, _underlying_code_objects, _search_template, _gui):
+        def find_dependencies(_code_objects, _underlying_code_objects, _search_template):
             """
             Function finds and adds the direct dependencies of code objects
             in the lower-cased code of underlying objects.
@@ -321,8 +323,6 @@ class VqlModel(QTreeWidget):
             :type _underlying_code_objects: list(tuple(CodeItem, str, str))
             :param _search_template: a template for the search string in which the object names can be put
             :type _search_template: str
-            :param _gui: the mode of operation
-            :type _gui: int
             :return: None
             :rtype: None
             """
@@ -331,13 +331,13 @@ class VqlModel(QTreeWidget):
                 for other_code_item, other_name, other_code in _underlying_code_objects:
                     search_string = _search_template.replace(place_holder, other_name)
                     if not code.find(search_string) == -1:
-                        if _gui & GUI_SELECT:
+                        if gui & GUI_SELECT:
                             code_object.dependencies.append(other_code_item)
-                        elif _gui & GUI_COMPARE:
+                        elif gui & GUI_COMPARE:
                             code_object.compare_dependencies.append(other_code_item)
 
         # helper function
-        def code_items_lower(_code_object_chapter_name, _gui):
+        def code_items_lower(_code_object_chapter_name):
             """
             Returns a list of code items with their code and object names in lower case of a particular chapter
             :param _code_object_chapter_name: the chapter name
@@ -348,10 +348,10 @@ class VqlModel(QTreeWidget):
             :rtype: list(tuple(CodeItem, str, str))
             """
             items = None
-            if _gui & GUI_SELECT:
+            if gui & GUI_SELECT:
                 items = [(code_item, code_item.object_name.lower(), code_item.code.lower())
                          for code_item in self.get_chapter_by_name(_code_object_chapter_name).code_items]
-            elif _gui & GUI_COMPARE:
+            elif gui & GUI_COMPARE:
                 items = [(code_item, code_item.object_name.lower(), code_item.compare_code.lower())
                          for code_item in self.get_chapter_by_name(_code_object_chapter_name).code_items]
             return items
@@ -371,10 +371,10 @@ class VqlModel(QTreeWidget):
         searches.append(('ASSOCIATIONS', 'VIEWS', f" {place_holder} "))
 
         # perform the searches and store dependencies
-        for code_object_chapter_name, underlying_code_object_chapter_name, search_template in searches:
-            code_objects = code_items_lower(code_object_chapter_name, gui)
-            underlying_code_objects = code_items_lower(underlying_code_object_chapter_name, gui)
-            find_dependencies(code_objects, underlying_code_objects, search_template, gui)
+        for chapter_name, underlying_chapter_name, search_template in searches:
+            code_objects = code_items_lower(chapter_name)
+            underlying_code_objects = code_items_lower(underlying_chapter_name)
+            find_dependencies(code_objects, underlying_code_objects, search_template)
 
     def get_dependees(self, gui):
         """Method that fills the code item's dependees list.
