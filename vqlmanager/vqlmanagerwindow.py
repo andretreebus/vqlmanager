@@ -22,13 +22,57 @@ from functools import partial
 # other libs
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu, QPushButton
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
-from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
+from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView, QVBoxLayout
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
 from vqlmanager.vql_manager_core import *
 from vqlmanager.vql_model import VqlModel
 from vqlmanager.code_item import CodeItem
+
+
+class DependencyViewer(QWidget):
+    def __init__(self, code_item, pos, parent=None):
+
+        def recurse(_code_item, _child):
+            _child.setForeground(0, RED)
+            _child.setText(0, _code_item.chapter_name[:-1] + ' : ' + _code_item.object_name)
+            for _code_item1 in _code_item.dependees:
+                _child1 = _code_item1.clone()
+                _child1.setForeground(0, WHITE)
+                _child1.setText(0, _code_item1.chapter_name[:-1] + ' : ' + _code_item1.object_name)
+                _child.addChild(_child1)
+                recurse(_code_item1, _child1)
+
+        super(DependencyViewer, self).__init__(parent)
+        # self.setGeometry(300, 400)
+        self.resize(300, 400)
+        self.move(pos)
+        self.setMinimumSize(QSize(180, 240))
+        self.setWindowTitle('Depencency Viewer')
+        self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.Popup | Qt.FramelessWindowHint)
+        layout = QVBoxLayout(self)
+
+        root_node = code_item.clone()
+        header = 'Dependencies on ' + code_item.object_name
+        self.dependency_tree = VQLManagerWindow.create_tree_widget(self, QTreeWidget, ITEM_FLAG_SEL, header=header)
+        recurse(code_item, root_node)
+
+        self.dependency_tree.addTopLevelItem(root_node)
+        self.dependency_tree.expandAll()
+        VQLManagerWindow.remove_checkboxes(self.dependency_tree)
+        self.close_button = QPushButton('Close')
+
+        layout.addWidget(self.dependency_tree, Qt.AlignCenter)
+        layout.addWidget(self.close_button, Qt.AlignCenter)
+        self.setLayout(layout)
+        self.close_button.clicked.connect(self.close)
+
+    @staticmethod
+    def get_viewer(code_item, pos, parent=None):
+        viewer = DependencyViewer(code_item, pos, parent)
+        result = viewer.show()
+        return result
 
 
 class VQLManagerWindow(QMainWindow):
@@ -66,8 +110,10 @@ class VQLManagerWindow(QMainWindow):
         self.layout = QGridLayout(self.mainwidget)
 
         # create radio buttons
-        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.mainwidget, self.select_button_labels)
-        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.mainwidget, self.diff_button_labels)
+        self.select_buttons, self.select_buttons_group = \
+            self.get_buttons_widget(self.mainwidget, self.select_button_labels)
+        self.diff_buttons, self.diff_buttons_group = \
+            self.get_buttons_widget(self.mainwidget, self.diff_button_labels)
 
         # create tree widgets VqlModel(self.mainwidget)
         self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
@@ -511,9 +557,9 @@ class VQLManagerWindow(QMainWindow):
 
         :param main_widget: the parent widget
         :type main_widget: QWidget
-        :param button_list: A list with names and colors
-        :type button_list: list(tuple(str, str))
-        :return: A tuple of wigdet and the group its in
+        :param button_dict: A dict with names and colors
+        :type button_dict: dict
+        :return: A tuple of widget and the group its in
         :rtype: tuple(Qwidget, QWidgetGroup)
         """
         layout = QHBoxLayout()  # layout for the central widget
@@ -717,12 +763,26 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-        item = self.all_chapters_treeview.itemAt(pos)
-        if item.class_type == CodeItem:
-            all_dependees = '\n'.join(['\n>>' + code_item.chapter_name.lower() + ': ' + code_item.object_name
-                                       for code_item in self.get_all_dependees(item)])
-            message = item.object_name + ' is a parent of:\n' + all_dependees
-            self.message_to_user(message)
+        if pos:
+            item = self.all_chapters_treeview.itemAt(pos)
+            if item.class_type == CodeItem:
+                DependencyViewer.get_viewer(item, pos, self)
+
+
+            # item_clone = item.clone()
+            # depend_tree = self.create_tree_widget(None, QTreeWidget, ITEM_FLAG_SEL, 'Dependent Items')
+            # depend_tree.addTopLevelItem(item_clone)
+            # for child_item in item.dependees:
+            #     child_clone = child_item.clone()
+            #     item_clone.addChild(child_clone)
+            # depend_tree.setWindowModality(Qt.ApplicationModal)
+            # depend_tree.show()
+
+
+            # all_dependees = '\n'.join(['\n>>' + code_item.chapter_name.lower() + ': ' + code_item.object_name
+            #                            for code_item in self.get_all_dependees(item)])
+            # message = item.object_name + ' is a parent of:\n' + all_dependees
+            # self.message_to_user(message)
 
     @staticmethod
     def run(task):
@@ -813,7 +873,7 @@ class VQLManagerWindow(QMainWindow):
         if item:
             item_data = item.data(col, Qt.UserRole)
             if item_data['class_type'] == CodeItem:
-                logger.debug('CodeItem clicked on View Pane: ' + item.text())
+                logger.debug('CodeItem clicked on View Pane: ' + item.text(0))
                 cache = dict()
                 cache['object_name'] = item_data['object_name']
                 cache['code'] = item_data['code']
@@ -860,7 +920,7 @@ class VQLManagerWindow(QMainWindow):
             code = raw_code.replace('\n', '<br />')
             code = code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
 
-            for word in RESERVED_WORDS:
+            for word in get_reserved_words():
                 code = code.replace(' ' + word + ' ', ' <strong>' + word + '</strong> ')  # rude method here
             code = code.replace('<br />', '<br />\n')
 
@@ -976,8 +1036,8 @@ class VQLManagerWindow(QMainWindow):
             try:
                 folder.mkdir(parents=True)
                 return folder
-            except OSError as e:
-                self.error_message_box('Error', 'Error creating folder', e)
+            except OSError as error:
+                self.error_message_box('Error', 'Error creating folder', str(error))
                 return None
 
         if any([item_path.exists() for item_path, _ in self.all_chapters_treeview.get_selected_code_files(folder)]):
@@ -1074,25 +1134,25 @@ class VQLManagerWindow(QMainWindow):
         else:
             return False
 
-    def error_message_box(self, title, text, e):
+    def error_message_box(self, title, text, error):
         """General messagebox if an error happened.
 
         :param title: Title of dialog window
         :type title: str
         :param text: Main text of dialog window
         :type text: str
-        :param e: the error text generated by python
-        :type e: OSError
+        :param error: the error text generated by python
+        :type error: str
         :return: None
         :rtype: None
         """
-        logger.error(title + str(e))
+        logger.error(title + str(error))
         msg = QMessageBox(self)
         msg.setWindowTitle(title)
         msg.setIcon(QMessageBox.Critical)
         msg.setText("<strong>An error has occurred!<strong>")
         msg.setInformativeText(text)
-        msg.setDetailedText(str(e))
+        msg.setDetailedText(error)
         msg.setStandardButtons(QMessageBox.Ok)
         msg.setDefaultButton(QMessageBox.Ok)
         msg.exec()
@@ -1112,8 +1172,8 @@ class VQLManagerWindow(QMainWindow):
         try:
             with file.open() as f:
                 content = f.read()
-        except (OSError, IOError) as e:
-            self.error_message_box("Error", "An error occurred during reading of file: " + str(file), e)
+        except (OSError, IOError) as error:
+            self.error_message_box("Error", "An error occurred during reading of file: " + str(file), str(error))
         if content:
             logger.debug(f"{str(file)} with {len(content)} characters read.")
         return content
@@ -1132,8 +1192,8 @@ class VQLManagerWindow(QMainWindow):
         if file.is_file():
             try:
                 file.unlink()
-            except (OSError, IOError) as e:
-                self.error_message_box("Error", "An error occurred during removal of file : " + str(file), e)
+            except (OSError, IOError) as error:
+                self.error_message_box("Error", "An error occurred during removal of file : " + str(file), str(error))
                 self.statusBar.showMessage("Save error")
                 return False
 
@@ -1142,8 +1202,8 @@ class VQLManagerWindow(QMainWindow):
                 written = f.write(content)
                 logger.debug(f"Saved {written} characters to {str(file)}")
                 return True
-        except (OSError, IOError) as e:
-            self.error_message_box("Error", "An error occurred during writing of file: " + str(file), e)
+        except (OSError, IOError) as error:
+            self.error_message_box("Error", "An error occurred during writing of file: " + str(file), str(error))
             return False
 
     # Saving and loading models
@@ -1327,10 +1387,10 @@ class VQLManagerWindow(QMainWindow):
                 try:
                     logger.debug("Creating Directory.")
                     sub_folder.mkdir(parents=True)
-                except (OSError, IOError) as e:
+                except (OSError, IOError) as error:
                     self.statusBar.showMessage("Save Error")
                     self.error_message_box("Error", "An error occurred during creation of the folders in : "
-                                           + sub_folder, e)
+                                           + sub_folder, str(error))
                     return False
 
             if not await self.write_file(part_log_filepath, part_log_content):
@@ -1459,9 +1519,13 @@ class VQLManagerWindow(QMainWindow):
         VqlModel.unpack(tree_sel)
 
         # # itemIterator traverses over every node
-        item_iterator = QTreeWidgetItemIterator(tree_sel)
+        self.remove_checkboxes(tree_sel)
+        self.all_chapters_treeview.blockSignals(blocked)
+
+    @staticmethod
+    def remove_checkboxes(tree):
+        item_iterator = QTreeWidgetItemIterator(tree)
         while item_iterator.value():
             item = item_iterator.value()
-            item.setData(col, Qt.CheckStateRole, QVariant())
+            item.setData(0, Qt.CheckStateRole, QVariant())
             item_iterator += 1
-        self.all_chapters_treeview.blockSignals(blocked)

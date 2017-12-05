@@ -58,9 +58,10 @@ class Chapter(QTreeWidgetItem):
         self.code_items = list()
         self.chapter_items = list()
         self.parent_chapter_name = ''
+        self.color = None
         self.set_color(WHITE)
         self.gui = GUI_SELECT
-        self.pack(None)
+        self.pack(WHITE)
         logger.debug(f">> Chapter: {self.name} created.")
 
     # General functions

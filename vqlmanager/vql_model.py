@@ -351,8 +351,6 @@ class VqlModel(QTreeWidget):
             Returns a list of code items with their code and object names in lower case of a particular chapter
             :param _code_object_chapter_name: the chapter name
             :type _code_object_chapter_name: str
-            :param _gui: mode flag
-            :type _gui: int
             :return: the requested list of tuples
             :rtype: list(tuple(CodeItem, str, str))
             """

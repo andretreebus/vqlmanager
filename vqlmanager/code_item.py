@@ -30,7 +30,6 @@ from PyQt5.QtGui import QBrush
 from vqlmanager.vql_manager_core import *
 
 
-
 class CodeItem(QTreeWidgetItem):
     """CodeItem class represents a .vql file with a single Denodo object.
 
@@ -69,6 +68,7 @@ class CodeItem(QTreeWidgetItem):
         self.compare_code = compare_code
         self.object_name = ''
         self.denodo_folder = ''
+        self.color = WHITE
         self.set_color(WHITE)
         self.gui = GUI_SELECT
         self.dependencies = list()
@@ -90,7 +90,7 @@ class CodeItem(QTreeWidgetItem):
 
         if mode & (COMP_FILE | COMP_REPO):
             self.compare()
-        self.pack(None)
+        self.pack(WHITE)
         logger.debug(f">>>> CodeItem: {self.object_name if self.object_name else '_'} created.")
 
     def set_compare_code(self, compare_code, mode):
