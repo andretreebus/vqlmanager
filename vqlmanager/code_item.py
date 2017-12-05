@@ -36,7 +36,7 @@ class CodeItem(QTreeWidgetItem):
     It inherits from QTreeWidgetItem, so it can display in a QTreeWidget.
     Basically a bag for pieces of Denodo code.
     """
-    def __init__(self, parent, chapter_name, mode, code=None, compare_code=None, preceding=None):
+    def __init__(self, parent: QTreeWidgetItem, chapter_name: str, mode: int, code=None, compare_code=None, preceding=None):
         """CodeItem Class constructor.
 
         :param parent: The object owning this object
@@ -93,7 +93,7 @@ class CodeItem(QTreeWidgetItem):
         self.pack(WHITE)
         logger.debug(f">>>> CodeItem: {self.object_name if self.object_name else '_'} created.")
 
-    def set_compare_code(self, compare_code, mode):
+    def set_compare_code(self, compare_code: str, mode: int):
         """Setter for the compare mode and code.
 
         :param compare_code: the other code
@@ -130,7 +130,7 @@ class CodeItem(QTreeWidgetItem):
                 self.suicide()
 
     @staticmethod
-    def get_diff(code, compare_code):
+    def get_diff(code: str, compare_code: str)->str:
         """Supplies the code edit widget with html for the comparison.
 
         The main intel of this function is supplied by the global instance of the diff_match_patch.py engine
@@ -182,7 +182,7 @@ class CodeItem(QTreeWidgetItem):
 
         return diff_html
 
-    def pack(self, color_filter):
+    def pack(self, color_filter: QBrush):
         """Packs and filters this code item object.
 
         Used before it gets cloned.
@@ -215,7 +215,7 @@ class CodeItem(QTreeWidgetItem):
         self.setData(0, Qt.UserRole, self.user_data)
 
     @staticmethod
-    def unpack(item):
+    def unpack(item: QTreeWidgetItem):
         """Unpacks and filters this code item.
 
         Used after it has been cloned and packed.
@@ -242,7 +242,7 @@ class CodeItem(QTreeWidgetItem):
         item.is_selected = item.user_data['selected']
         item.setHidden(item.user_data['hidden'])
 
-    def set_gui(self, gui):
+    def set_gui(self, gui: int):
         """Sets the gui type flag.
 
         This function also resets the compare mode if it was there.
@@ -270,7 +270,7 @@ class CodeItem(QTreeWidgetItem):
         """
         self.parent().remove_child(self)
 
-    def get_file_path(self, folder):
+    def get_file_path(self, folder: Path)->Path:
         """Get the file path for this code item.
 
         This function changes and slash, forward and backward into an underscore
@@ -285,7 +285,7 @@ class CodeItem(QTreeWidgetItem):
         file_name = folder / (self.object_name.replace('/', '_').replace('\\', '_') + '.vql')
         return file_name
 
-    def is_selected(self):
+    def is_selected(self)->bool:
         """Is the object selected.
 
         :return: Boolean
@@ -296,7 +296,7 @@ class CodeItem(QTreeWidgetItem):
         else:
             return False
 
-    def set_color(self, color):
+    def set_color(self, color: QBrush):
         """Set the color.
 
         :param color:
@@ -325,7 +325,7 @@ class CodeItem(QTreeWidgetItem):
                 self.denodo_folder = self.extract_denodo_folder_name_from_code(self.chapter_name, self.code)
 
     @staticmethod
-    def extract_denodo_folder_name_from_code(chapter_name, code):
+    def extract_denodo_folder_name_from_code(chapter_name: str, code: str)->Union[Path, None]:
         """Extracts the denodo folder name from code.
 
         :param chapter_name: Type of denodo object
@@ -333,7 +333,7 @@ class CodeItem(QTreeWidgetItem):
         :param code: the code to create the object
         :type code: str
         :return: The denodo path
-        :rtype: str
+        :rtype: Union[Path, None]
         """
         if chapter_name == 'DATASOURCES' and code.find('DATASOURCE LDAP') > -1:
                 folder_path = ''
@@ -355,7 +355,7 @@ class CodeItem(QTreeWidgetItem):
         return folder_path
 
     @staticmethod
-    def extract_object_name_from_code(chapter_name, code):
+    def extract_object_name_from_code(chapter_name: str, code: str)->str:
         """Searches for the Denodo object name.
 
         Helper function for the 'parse' function

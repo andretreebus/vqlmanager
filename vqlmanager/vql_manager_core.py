@@ -16,6 +16,7 @@ __author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 # standard library
 import logging
 from pathlib import Path
+from typing import Union, Iterator
 # other libs
 from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
@@ -155,7 +156,7 @@ COMPARE_CODE = CodeView.COMPARE_CODE
 DIFF_CODE = CodeView.DIFF_CODE
 
 
-def translate_colors(item_color, to_text=True):
+def translate_colors(item_color: Union[str, QBrush], to_text=True)->Union[str, QBrush]:
     """
     Function for translating item QBrush objects for strings
     This is needed because the set function does not accept unhashable items
@@ -188,7 +189,7 @@ def translate_colors(item_color, to_text=True):
     return color
 
 
-def show_mode(mode):
+def show_mode(mode: int)->str:
     """Returns debug info string to logger.
 
     :param mode: the mode to show
@@ -218,16 +219,16 @@ def show_mode(mode):
     return ' : '.join(mode_txt)
 
 
-def get_reserved_words():
-    words = ['ADD', 'AS', 'ANY', 'OPT', 'OR', 'CREATE', 'VIEW', 'NULL', 'ALTER', 'NOT', 'FROM', 'AND',
-             'SELECT', 'WHEN', 'JOIN', 'IS', 'ON', 'LEFT', 'CASE', 'TABLE', 'WHERE', 'DEFAULT', 'OFF',
-             'JDBC', 'INNER', 'OF', 'ZERO', 'NOS', 'UNION', 'DF', 'DISTINCT', 'ASC', 'FULL', 'FALSE',
-             'DESC', 'BASE', 'DATABASE', 'TRUE', 'ALL', 'CONTEXT', 'CONNECT', 'LDAP', 'WITH', 'SWAP', 'ARN',
-             'BOTH', 'CALL', 'CROSS', 'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'CUSTOM', 'DROP', 'EXISTS',
-             'FETCH', 'FLATTEN', 'GRANT', 'GROUP BY', 'GS', 'HASH', 'HAVING', 'HTML', 'IF', 'INTERSECT',
-             'INTO', 'LEADING', 'LIMIT', 'MERGE', 'MINUS', 'MY', 'NATURAL', 'NESTED', 'OBL', 'ODBC',
-             'OFFSET', 'ONE', 'ORDER BY', 'ORDERED', 'PRIVILEGES', 'READ', 'REVERSEORDER', 'REVOKE',
-             'RIGHT', 'ROW', 'TO', 'TRACE', 'TRAILING', 'USER', 'USING', 'WRITE', 'WS']
+def get_reserved_words()->Iterator[str]:
+    words = list('ADD', 'AS', 'ANY', 'OPT', 'OR', 'CREATE', 'VIEW', 'NULL', 'ALTER', 'NOT', 'FROM', 'AND',
+                 'SELECT', 'WHEN', 'JOIN', 'IS', 'ON', 'LEFT', 'CASE', 'TABLE', 'WHERE', 'DEFAULT', 'OFF',
+                 'JDBC', 'INNER', 'OF', 'ZERO', 'NOS', 'UNION', 'DF', 'DISTINCT', 'ASC', 'FULL', 'FALSE',
+                 'DESC', 'BASE', 'DATABASE', 'TRUE', 'ALL', 'CONTEXT', 'CONNECT', 'LDAP', 'WITH', 'SWAP', 'ARN',
+                 'BOTH', 'CALL', 'CROSS', 'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'CUSTOM', 'DROP', 'EXISTS',
+                 'FETCH', 'FLATTEN', 'GRANT', 'GROUP BY', 'GS', 'HASH', 'HAVING', 'HTML', 'IF', 'INTERSECT',
+                 'INTO', 'LEADING', 'LIMIT', 'MERGE', 'MINUS', 'MY', 'NATURAL', 'NESTED', 'OBL', 'ODBC',
+                 'OFFSET', 'ONE', 'ORDER BY', 'ORDERED', 'PRIVILEGES', 'READ', 'REVERSEORDER', 'REVOKE',
+                 'RIGHT', 'ROW', 'TO', 'TRACE', 'TRAILING', 'USER', 'USING', 'WRITE', 'WS')
 
     words.append(DELIMITER)
     words.extend(CHAPTER_NAMES)
@@ -242,7 +243,13 @@ MAX_RECENT_FILES = 8
 # <link rel="stylesheet" type="text/css" href="mystyle.css">
 
 
-def doc_template(object_name, body):
+def doc_template(object_name: str, body: str)->str:
+    """
+    Returns a html page
+    :param object_name: name of the object
+    :param body: body of the page
+    :return: the page
+    """
     doc = '''
 <!DOCTYPE html>
 <html lang="en">

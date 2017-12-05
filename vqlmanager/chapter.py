@@ -66,7 +66,7 @@ class Chapter(QTreeWidgetItem):
 
     # General functions
 
-    def pack(self, color_filter):
+    def pack(self, color_filter: QBrush):
         """Packs and filters this chapter object and its code_item children.
 
         Used before it gets cloned.
@@ -99,7 +99,7 @@ class Chapter(QTreeWidgetItem):
         self.setData(0, Qt.UserRole, self.user_data)
 
     @staticmethod
-    def unpack(item):
+    def unpack(item: QTreeWidgetItem):
         """Unpacks and filters this chapter object and its code_item children.
 
         Used after it has been cloned and packed,
@@ -147,7 +147,7 @@ class Chapter(QTreeWidgetItem):
             item_class.unpack(child)
 
     @staticmethod
-    def make_header(chapter_name):
+    def make_header(chapter_name: str)->str:
         """Constructs a string that can be used to identify chapters in a Denodo exported database file.
 
         :param chapter_name: string with Chapter name
@@ -159,7 +159,7 @@ class Chapter(QTreeWidgetItem):
                          + chapter_name + '\n# #######################################\n'
         return chapter_header
 
-    def set_gui(self, gui):
+    def set_gui(self, gui: int):
         """Sets the Gui type (GUI_SELECT GUI_COMPARE) on the chapter and its children.
 
         :param gui: the new GUI type
@@ -173,7 +173,7 @@ class Chapter(QTreeWidgetItem):
         for code_item in self.code_items:
             code_item.set_gui(gui)
 
-    def set_color_based_on_children(self, mode, color=None):
+    def set_color_based_on_children(self, mode: int, color=None):
         """Sets the color of chapters based on the non hidden children.
 
         :param mode: the mode of the gui
@@ -203,7 +203,7 @@ class Chapter(QTreeWidgetItem):
         else:
             self.set_color(YELLOW)
 
-    def set_color(self, color):
+    def set_color(self, color: QBrush):
         """Set the color of this item.
 
         :param color:
@@ -213,7 +213,7 @@ class Chapter(QTreeWidgetItem):
         self.color = color
         self.setForeground(0, color)
 
-    def get_code_item_by_object_name(self, object_name):
+    def get_code_item_by_object_name(self, object_name: str)->Tuple[int, Union[CodeItem, None]]:
         """Returns a tuple of a code item child and the index it has.
 
         :param object_name: The object name of the CodeItem
@@ -228,7 +228,7 @@ class Chapter(QTreeWidgetItem):
                         return index, code_item
         return 0, None
 
-    def is_selected(self):
+    def is_selected(self)->bool:
         """Function returns if the chapter is selected or has some code items selected (tri state).
 
         :return: Boolean
@@ -241,7 +241,7 @@ class Chapter(QTreeWidgetItem):
 
     # export functions
     # to file
-    def get_code_as_file(self, selected):
+    def get_code_as_file(self, selected: bool)->str:
         """Returns the combined Denodo code for a whole chapter.
 
         This function adds a chapter header, and only selected code items
@@ -258,7 +258,7 @@ class Chapter(QTreeWidgetItem):
         return self.header + '\n'.join(code)
 
     # to repository
-    def get_part_log(self, base_path):
+    def get_part_log(self, base_path: Path)->Tuple[Path, str]:
         """Returns data to write the part.log files.
 
         Returning two values: the file path for the part.log file and its content as a string.
@@ -277,14 +277,11 @@ class Chapter(QTreeWidgetItem):
         part_log_content = '\n'.join(part_log)
         return part_log_filepath, part_log_content
 
-    def selected_items(self):
+    def selected_items(self)->List[CodeItem]:
         """Function for looping over selected code items.
 
         :return: list with items
         :rtype: list(CodeItem)
         """
-        items = list()
-        for code_item in self.code_items:
-            if code_item.is_selected():
-                items.append(code_item)
+        items = [code_item for code_item in self.code_items if code_item.is_selected()]
         return items

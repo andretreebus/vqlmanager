@@ -17,6 +17,7 @@ __author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
 # standard library
 from pathlib import Path
+from typing import Tuple, Generator
 # other libs
 from vqlmanager.vql_manager_core import *
 from PyQt5.QtCore import Qt
@@ -35,7 +36,7 @@ class VqlModel(QTreeWidget):
     The purpose of this class is to make GUI based selections.
     """
 
-    def __init__(self, parent):
+    def __init__(self, parent: Union[QWidget, None]):
         """Constructor of the class.
 
         Mostly setting the stage for the behavior of the QTreeWidget.
@@ -77,7 +78,7 @@ class VqlModel(QTreeWidget):
             chapter.pack(self.color_filter)
 
     @staticmethod
-    def unpack(tree):
+    def unpack(tree: QTreeWidget):
         """Unpacks the data from QtreeWidgetItem's Userdata.
 
         It also prunes the tree on checked items only with children
@@ -97,7 +98,7 @@ class VqlModel(QTreeWidget):
         for child in reversed(deletes):
             tree.takeTopLevelItem(tree.indexOfTopLevelItem(child))
 
-    def _add_chapters(self, chapter_names):
+    def _add_chapters(self, chapter_names: List[str]):
         """Method that adds a chapter to the chapter list for every name given.
 
         :param chapter_names: list of chapter_names of type string
@@ -109,7 +110,7 @@ class VqlModel(QTreeWidget):
             chapter = Chapter(self.root, chapter_name)
             self.chapters.append(chapter)
 
-    def get_code_items(self, chapter_list=None):
+    def get_code_items(self, chapter_list=None)->Tuple[Chapter, CodeItem]:
         """Generator to loop all code items.
 
         Optionally a list with chapter names may be given as a filter.
@@ -118,7 +119,7 @@ class VqlModel(QTreeWidget):
         :param chapter_list: Optional list with chapter names
         :type chapter_list: list
         :return: Yields a tuple of chapter and code_item
-        :rtype: tuple(Chapter, CodeItem)
+        :rtype: Tuple[Chapter, CodeItem]
         """
         if chapter_list:
             chapters = (chapter for chapter in self.chapters if chapter.name in chapter_list)
@@ -129,9 +130,10 @@ class VqlModel(QTreeWidget):
             for code_item in chapter.code_items:
                 yield (chapter, code_item)
 
-    def get_code_as_file(self, selected):
+    def get_code_as_file(self, selected: bool)->str:
         """Function that puts the code content in a single .vql file of all checked/selected items.
-
+        :param selected: Only selected items or not
+        :type selected: bool
         :return: string of code content
         :rtype: str
         """
@@ -139,7 +141,7 @@ class VqlModel(QTreeWidget):
         code = [chapter.get_code_as_file(selected) for chapter in self.chapters]
         return PROP_QUOTE + '\n'.join(code)
 
-    def get_part_logs(self, folder):
+    def get_part_logs(self, folder: Path)->Generator[Tuple[Path, str]]:
         """Gives all part.log data.
 
         With log file names (key) and their content (values).
@@ -154,14 +156,14 @@ class VqlModel(QTreeWidget):
         result = (chapter.get_part_log(folder) for chapter in self.chapters if chapter.is_selected())
         return result
 
-    def get_selected_code_files(self, folder):
+    def get_selected_code_files(self, folder: Path)->List[Tuple[Path, str]]:
         """Function for looping over all selected code items in the model.
 
         This function is used to write the repository
         :param folder: the proposed folder for storage
         :type folder: Path
         :return: an iterator with two unpacked values: filepath and code content
-        :rtype: list(tuple(Path, str)
+        :rtype: list(tuple(Path, str))
         """
 
         item_path_code = list()
@@ -174,7 +176,7 @@ class VqlModel(QTreeWidget):
                 item_path_code.append((item_path, item_code))
         return item_path_code
 
-    def get_chapter_by_name(self, chapter_name):
+    def get_chapter_by_name(self, chapter_name: str)->Chapter:
         """Function that returns a chapter from the 'chapters' list by its name.
 
         :param chapter_name: the name of the particular chapter requested
@@ -188,7 +190,7 @@ class VqlModel(QTreeWidget):
                 break
         return chapter
 
-    def switch_mode(self, new_mode):
+    def switch_mode(self, new_mode: int):
         """Method to switch mode on the tree item, sets appropriate headers and tooltips.
 
         :param new_mode: The new mode
@@ -207,7 +209,7 @@ class VqlModel(QTreeWidget):
             self.setToolTip('Select items')
             self.setToolTipDuration(1000)
 
-    async def parse(self, file_content, mode):
+    async def parse(self, file_content: str, mode: int):
         """Method that parses the denodo export file.
 
         It analyzes it to construct/fill the VqlModel tree.
@@ -287,7 +289,8 @@ class VqlModel(QTreeWidget):
         if gui & GUI_SELECT:
             for _, code_item in self.get_code_items():
                 if code_item.dependees:
-                    code_item.set_color(RED)
+                    pass
+                    # code_item.set_color(RED)
             for chapter in self.chapters:
                 chapter.set_gui(gui)
                 chapter.set_color_based_on_children(gui, color=WHITE)
@@ -306,7 +309,7 @@ class VqlModel(QTreeWidget):
 
         logger.debug('Finished parsing data.')
 
-    def get_dependencies(self, gui):
+    def get_dependencies(self, gui: int):
         """Method with nifty code to extract en fill direct dependencies.
 
         Per code object upon other objects based on their vql code.
@@ -383,7 +386,7 @@ class VqlModel(QTreeWidget):
             underlying_code_objects = code_items_lower(underlying_chapter_name)
             find_dependencies(code_objects, underlying_code_objects, search_template)
 
-    def get_dependees(self, gui):
+    def get_dependees(self, gui: int):
         """Method that fills the code item's dependees list.
 
         Only direct dependees (objects that depend on this object) are stored.
@@ -425,7 +428,7 @@ class VqlModel(QTreeWidget):
                 item.compare_dependees = dependees
 
     @staticmethod
-    def unique_list(_list):
+    def unique_list(_list: list):
         """Function that turns a list into a list with unique items.
 
         Keeping the sort order.
@@ -441,7 +444,7 @@ class VqlModel(QTreeWidget):
                 new_list.append(item)
         return new_list
 
-    def change_view(self, mode):
+    def change_view(self, mode: int):
         """Method that swaps the tree items from VQL View to Denodo file structure view and back.
 
         The actual switch is done in switch_view function.
@@ -486,7 +489,7 @@ class VqlModel(QTreeWidget):
         self.root.addChildren(self.storage_list)
         self.storage_list = temp
 
-    def build_denodo_view(self, gui):
+    def build_denodo_view(self, gui: int):
         """Method that builds up the Denodo folder structure.
 
         Using chapter items as folders and adds code_items as children.

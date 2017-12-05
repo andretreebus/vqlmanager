@@ -15,12 +15,13 @@ __author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
 # standard library
 from pathlib import Path
+from typing import List, Tuple, Union
 import subprocess
 import sys
 import asyncio
 from functools import partial
 # other libs
-from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings
+from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings, QPoint
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu, QPushButton
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
@@ -32,9 +33,9 @@ from vqlmanager.code_item import CodeItem
 
 
 class DependencyViewer(QWidget):
-    def __init__(self, code_item, pos, parent=None):
+    def __init__(self, code_item: CodeItem, pos: QPoint, parent=None):
 
-        def recurse(_code_item, _child):
+        def recurse(_code_item: CodeItem, _child: QTreeWidgetItem):
             _child.setForeground(0, RED)
             _child.setText(0, _code_item.chapter_name[:-1] + ' : ' + _code_item.object_name)
             for _code_item1 in _code_item.dependees:
@@ -69,7 +70,7 @@ class DependencyViewer(QWidget):
         self.close_button.clicked.connect(self.close)
 
     @staticmethod
-    def get_viewer(code_item, pos, parent=None):
+    def get_viewer(code_item: CodeItem, pos: QPoint, parent=None):
         viewer = DependencyViewer(code_item, pos, parent)
         result = viewer.show()
         return result
@@ -223,7 +224,8 @@ class VQLManagerWindow(QMainWindow):
         logger.info("Finished Window creation")
 
     @staticmethod
-    def create_tree_widget(parent, class_type, flags, header=None, tooltip=None):
+    def create_tree_widget(parent: QWidget, class_type, flags: int, header=None, tooltip=None)\
+            ->Union[VqlModel, QTreeWidget]:
         """Factory for instances of a QTreeWidget or VqlModel
 
         :param parent: The parent of the widget, in which it is placed
@@ -252,7 +254,7 @@ class VQLManagerWindow(QMainWindow):
         tree_widget.setColumnCount(1)
         return tree_widget
 
-    def new_tree_data(self, mode):
+    def new_tree_data(self, mode: int)->int:
         """Function resets the data in the trees so the are new and shiny.
 
         :param mode: Flags
@@ -280,7 +282,7 @@ class VQLManagerWindow(QMainWindow):
         return new_mode
 
     @staticmethod
-    def mode_strip(mode, strip_list):
+    def mode_strip(mode: int, strip_list: List[int])->int:
         """Removes flags in the strip_list from the mode flag.
 
         Normally this is done with mode = mode & ~flag , but since python has not unsigned integers we use subtract
@@ -297,7 +299,7 @@ class VQLManagerWindow(QMainWindow):
         return mode
 
     @staticmethod
-    def resize_widget(some_widget):
+    def resize_widget(some_widget: QWidget):
         """Sets size policy on the widget
 
         :param some_widget: a widget
@@ -535,7 +537,7 @@ class VQLManagerWindow(QMainWindow):
             self.recent_repository_separator.setVisible(False)
             self.compare_recent_repository_separator.setVisible(False)
 
-    def get_all_dependees(self, item, items=list()):
+    def get_all_dependees(self, item: CodeItem, items=list())->List[CodeItem]:
         """Recursive function to gather all the items that are dependent on this one.
 
         :param item: a CodeItem object
@@ -552,7 +554,7 @@ class VQLManagerWindow(QMainWindow):
             return items
 
     @staticmethod
-    def get_buttons_widget(main_widget, button_dict):
+    def get_buttons_widget(main_widget: QWidget, button_dict: dict)->Tuple[QWidget, QButtonGroup]:
         """Constructs a series of related radio buttons used to filter CodeItems.
 
         :param main_widget: the parent widget
@@ -577,7 +579,7 @@ class VQLManagerWindow(QMainWindow):
             layout.addWidget(btn, 0, Qt.AlignLeft)
         return widget, group
 
-    def get_mode(self):
+    def get_mode(self)->int:
         """Getter for the mode flag
 
         :return: the current mode
@@ -585,7 +587,7 @@ class VQLManagerWindow(QMainWindow):
         """
         return self._mode
 
-    def switch_to_mode(self, new_mode):
+    def switch_to_mode(self, new_mode: int):
         """Redresses the window to reflect the new mode
         :param new_mode: the new mode
         :return: None
@@ -627,7 +629,7 @@ class VQLManagerWindow(QMainWindow):
 
     # Event handlers for opening and saving models
 
-    def on_open_recent_files(self, index, mode):
+    def on_open_recent_files(self, index: int, mode: int):
         """Event handler for the click on a recent files menu item.
 
         This function collects the data from the OS storage about the recent file/repo list
@@ -655,7 +657,7 @@ class VQLManagerWindow(QMainWindow):
             file = files[index]
             self.on_open(mode, file)
 
-    def on_select_buttons_clicked(self, button):
+    def on_select_buttons_clicked(self, button: QRadioButton):
         """Event handler for the radio buttons in the left pane.
 
         To filter the VqlModel tree based on color of the items.
@@ -668,7 +670,7 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.color_filter = color
         self.update_tree_widgets()
 
-    def on_diff_buttons_clicked(self, button):
+    def on_diff_buttons_clicked(self, button: QRadioButton):
         """Event handler for the radio buttons in the right pane.
 
         To filter the view in the code edit widget.
@@ -687,7 +689,7 @@ class VQLManagerWindow(QMainWindow):
             self.code_show_selector = DIFF_CODE
         self.show_code_text()
 
-    def on_open(self, new_mode, load_path=None):
+    def on_open(self, new_mode: int, load_path=None):
         """Event handler Open File menu items and Compare open items.
 
         This function is the starting point for loading a model based on a .vql file or a repository
@@ -756,7 +758,7 @@ class VQLManagerWindow(QMainWindow):
                         self.run(self.load_model_from_repository(folder, COMP_REPO | GUI_COMPARE))
         logger.info("File or repository loaded.")
 
-    def on_right_click(self, pos):
+    def on_right_click(self, pos: QPoint):
         """Event handler for the right click event on the all_chapter_treeview widget.
 
         :param pos: position of the click
@@ -767,22 +769,6 @@ class VQLManagerWindow(QMainWindow):
             item = self.all_chapters_treeview.itemAt(pos)
             if item.class_type == CodeItem:
                 DependencyViewer.get_viewer(item, pos, self)
-
-
-            # item_clone = item.clone()
-            # depend_tree = self.create_tree_widget(None, QTreeWidget, ITEM_FLAG_SEL, 'Dependent Items')
-            # depend_tree.addTopLevelItem(item_clone)
-            # for child_item in item.dependees:
-            #     child_clone = child_item.clone()
-            #     item_clone.addChild(child_clone)
-            # depend_tree.setWindowModality(Qt.ApplicationModal)
-            # depend_tree.show()
-
-
-            # all_dependees = '\n'.join(['\n>>' + code_item.chapter_name.lower() + ': ' + code_item.object_name
-            #                            for code_item in self.get_all_dependees(item)])
-            # message = item.object_name + ' is a parent of:\n' + all_dependees
-            # self.message_to_user(message)
 
     @staticmethod
     def run(task):
@@ -798,7 +784,7 @@ class VQLManagerWindow(QMainWindow):
             loop.run_until_complete(task)
             loop.close()
 
-    def on_save(self, save_mode):
+    def on_save(self, save_mode: int):
         """Event handler for the Save to File or Save to Repository menu items.
 
         This function is the starting point for saving a model to a .vql file or repository.
@@ -846,7 +832,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             qApp.quit()
 
-    def on_selection_changed(self, item, *_):
+    def on_selection_changed(self, item: QTreeWidgetItem, *_):
         """Event handler for changes of the selection (check boxes) in the all_chapters_treeview (VqlModel).
 
         :param item: The item that changed in the all_chapters_treeview
@@ -859,7 +845,7 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.changed = True
         self.update_timer.start(100)
 
-    def on_click_item_selected(self, item, col):
+    def on_click_item_selected(self, item: QTreeWidgetItem, col: int):
         """Event handler for looking up code in the View Pane (code item clicked).
 
         :param item: The CodeItem clicked on the Selection Tree
@@ -901,7 +887,7 @@ class VQLManagerWindow(QMainWindow):
         QMessageBox.aboutQt(self, self.windowTitle())
 
     @staticmethod
-    def format_source_code(object_name, raw_code, code_type):
+    def format_source_code(object_name: str, raw_code: str, code_type: int)->str:
         """Creates html for the code edit widget to view the source code.
 
         :param object_name: Name of the CodeItem
@@ -952,7 +938,7 @@ class VQLManagerWindow(QMainWindow):
 
     # dialogs for opening and saving
 
-    def ask_file_open(self):
+    def ask_file_open(self)->Union[Path, None]:
         """Asks user which file to open to via a dialog.
 
         :return: filepath
@@ -975,20 +961,19 @@ class VQLManagerWindow(QMainWindow):
             return None
 
         filename = Path(str(filename))
-        # filename = filename)
 
         if not filename.exists():
             self.message_to_user("File does not exist")
-            return ''
+            return None
 
         if not filename.suffix == '.vql':
             self.message_to_user("This file has the wrong extension")
-            return ''
+            return None
 
         logger.info('Got: ' + str(filename))
         return filename
 
-    def ask_repository_open(self):
+    def ask_repository_open(self)->Union[Path, None]:
         """Asks user which repository (folder) to open via a dialog.
 
         :return: the folder path
@@ -1013,7 +998,7 @@ class VQLManagerWindow(QMainWindow):
         logger.info('Got:' + str(folder))
         return folder
 
-    def ask_repository_save(self):
+    def ask_repository_save(self)->Union[Path, None]:
         """Asks user which folder to save to via a dialog.
 
         If the folder exists, then asks if overwrite is allowed.
@@ -1046,7 +1031,7 @@ class VQLManagerWindow(QMainWindow):
         logger.info('Got:' + str(folder))
         return folder
 
-    def ask_file_save(self):
+    def ask_file_save(self)->Union[Path, None]:
         """Asks which file to save to via a dialog.
 
         It also checks if the file may be overwritten
@@ -1078,7 +1063,7 @@ class VQLManagerWindow(QMainWindow):
 
     # General purpose dialogs
 
-    def message_to_user(self, message):
+    def message_to_user(self, message: str):
         """General Messagebox functionality.
 
         :return: None
@@ -1093,7 +1078,7 @@ class VQLManagerWindow(QMainWindow):
         msg.setDefaultButton(QMessageBox.Ok)
         msg.exec()
 
-    def ask_overwrite(self):
+    def ask_overwrite(self)->bool:
         """General Messagebox to warn/ask for files to be overwritten.
 
         :return: Boolean if allowed
@@ -1111,7 +1096,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             return False
 
-    def ask_drop_changes(self):
+    def ask_drop_changes(self)->bool:
         """General Messagebox to warn/ask if made changes can be dropped.
 
         :return: Boolean if allowed
@@ -1134,7 +1119,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             return False
 
-    def error_message_box(self, title, text, error):
+    def error_message_box(self, title: str, text: str, error: str):
         """General messagebox if an error happened.
 
         :param title: Title of dialog window
@@ -1159,7 +1144,7 @@ class VQLManagerWindow(QMainWindow):
 
     # Helper function for io to disk
 
-    async def read_file(self, file):
+    async def read_file(self, file: Path)->str:
         """General function to read in a file
 
         :param file: The path to the file
@@ -1178,7 +1163,7 @@ class VQLManagerWindow(QMainWindow):
             logger.debug(f"{str(file)} with {len(content)} characters read.")
         return content
 
-    async def write_file(self, file, content):
+    async def write_file(self, file: Path, content: str)->bool:
         """General function to write a file to disk
 
         :param file: the path where the file should be written to
@@ -1208,7 +1193,7 @@ class VQLManagerWindow(QMainWindow):
 
     # Saving and loading models
 
-    async def load_model_from_file(self, file, new_mode):
+    async def load_model_from_file(self, file: Path, new_mode: int):
         """Loads a single .vql file into the VqlModel instance.
 
         :param file: path of the file to bew loaded in
@@ -1248,7 +1233,7 @@ class VQLManagerWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
         logger.debug(f"Loading model from file finished.")
 
-    async def load_model_from_repository(self, folder, new_mode):
+    async def load_model_from_repository(self, folder: Path, new_mode: int):
         """Loads a repository folder structure into the VqlModel instance.
 
         :param folder: the folder containing the repository
@@ -1329,7 +1314,7 @@ class VQLManagerWindow(QMainWindow):
         self.statusBar.showMessage("Model Loaded")
         logger.debug(f"Repository loaded with new mode {show_mode(self._mode)}")
 
-    async def save_model_to_file(self, file):
+    async def save_model_to_file(self, file: Path)->bool:
         """Saves the single .vql file.
 
         :param file: the file!
@@ -1354,7 +1339,7 @@ class VQLManagerWindow(QMainWindow):
                 logger.debug("Not Saved")
                 return False
 
-    async def save_model_to_repository(self, folder):
+    async def save_model_to_repository(self, folder: Path)->bool:
         """Saves the model selection to a repository.
 
         The files are written to chapter_folders
@@ -1417,7 +1402,7 @@ class VQLManagerWindow(QMainWindow):
         logger.debug("Saved OK")
         return True
 
-    def add_to_recent_files(self, file_path, mode):
+    def add_to_recent_files(self, file_path: Path, mode: int):
         """Function adds a file path to the OS storage of recent files.
 
         :param file_path: The path to add
@@ -1507,7 +1492,6 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.blockSignals(True)
 
         # convenience pointer names
-        col = 0
         tree_sel = self.selected_treeview
         root_sel = tree_sel.invisibleRootItem()
 
@@ -1523,7 +1507,7 @@ class VQLManagerWindow(QMainWindow):
         self.all_chapters_treeview.blockSignals(blocked)
 
     @staticmethod
-    def remove_checkboxes(tree):
+    def remove_checkboxes(tree: QTreeWidget):
         item_iterator = QTreeWidgetItemIterator(tree)
         while item_iterator.value():
             item = item_iterator.value()
