@@ -13,18 +13,19 @@ This class is inherited from QTreeWidgetItem
 for showing itself in a QTreeWidget
 
 file: code_item.py
-Dependencies: os PyQt5 vql_manager_core.py
+Dependencies: PyQt5 vql_manager
 
 Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
+__author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
-# from os import path
+# other libs
 from PyQt5.QtGui import QBrush
 from PyQt5.QtWidgets import QTreeWidgetItem
-from code_item import CodeItem
-from vql_manager_core import *
+from vqlmanager.code_item import CodeItem
+from vqlmanager.vql_manager_core import *
 
 
 class Chapter(QTreeWidgetItem):

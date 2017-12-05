@@ -7,18 +7,21 @@ This program shows GUI
 to split, select, combine
 and compare Denodo .vql files
 
-Dependencies: shutil collections PyQt5 qdarkstyle and vqlmanagerwindow.py
+Dependencies: PyQt5, sys, qdarkstyle and vqlmanager
 
 file: vqlmanagerwindow.py
 Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
+__author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
-from sys import exit, argv
+# standard library
+from sys import exit, argv, version_info
+# other libs
 from PyQt5.QtWidgets import QApplication
-from vqlmanagerwindow import VQLManagerWindow
-from vql_manager_core import logger
+from vqlmanager.vqlmanagerwindow import VQLManagerWindow
+from vqlmanager.vql_manager_core import logger
 import qdarkstyle
 
 app = None
@@ -32,6 +35,10 @@ def main():
     """
     logger.info("Entering main")
     global app
+
+    if version_info < (3, 6):
+        print('You need at least Python version 3.6 to run this application.')
+        return
 
     app = QApplication(argv)
     app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())

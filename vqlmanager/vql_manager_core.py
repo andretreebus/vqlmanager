@@ -5,18 +5,21 @@ VQL_Constants and globals
 Several shared objects in the VQL Manager app
 
 file: vql_manager_core.py
-Dependencies: PyQt5
+Dependencies: PyQt5, pathlib, vqlmanager, logging
 
 Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
+__author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
-from PyQt5.QtCore import Qt, QObject, Q_FLAGS
-from PyQt5.QtGui import QBrush, QColor
-from diff_match_patch import diff_match_patch
+# standard library
 import logging
 from pathlib import Path
+# other libs
+from PyQt5.QtCore import Qt, QObject, Q_FLAGS
+from PyQt5.QtGui import QBrush, QColor
+from vqlmanager.diff_match_patch import diff_match_patch
 
 # registry data
 COMPANY = 'www.erasmusmc.nl'
@@ -50,7 +53,7 @@ PART_STATE = Qt.PartiallyChecked
 CHECKED = Qt.Checked
 UNCHECKED = Qt.Unchecked
 
-# Hint for the width of the tree wigets
+# Hint for the width of the tree widgets
 PANE_WIDTH = 300
 
 # # application modes en flags
@@ -216,16 +219,22 @@ def show_mode(mode):
 
 
 def get_reserved_words():
-    with open('denodo_reserved_words.txt') as f:
-        file = f.read()
-        words = file.split()
-        words.append(DELIMITER)
-        words.extend(CHAPTER_NAMES)
-        reserved_words = reversed(sorted(words, key=len))
-        return reserved_words
+    words = ['ADD', 'AS', 'ANY', 'OPT', 'OR', 'CREATE', 'VIEW', 'NULL', 'ALTER', 'NOT', 'FROM', 'AND',
+             'SELECT', 'WHEN', 'JOIN', 'IS', 'ON', 'LEFT', 'CASE', 'TABLE', 'WHERE', 'DEFAULT', 'OFF',
+             'JDBC', 'INNER', 'OF', 'ZERO', 'NOS', 'UNION', 'DF', 'DISTINCT', 'ASC', 'FULL', 'FALSE',
+             'DESC', 'BASE', 'DATABASE', 'TRUE', 'ALL', 'CONTEXT', 'CONNECT', 'LDAP', 'WITH', 'SWAP', 'ARN',
+             'BOTH', 'CALL', 'CROSS', 'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'CUSTOM', 'DROP', 'EXISTS',
+             'FETCH', 'FLATTEN', 'GRANT', 'GROUP BY', 'GS', 'HASH', 'HAVING', 'HTML', 'IF', 'INTERSECT',
+             'INTO', 'LEADING', 'LIMIT', 'MERGE', 'MINUS', 'MY', 'NATURAL', 'NESTED', 'OBL', 'ODBC',
+             'OFFSET', 'ONE', 'ORDER BY', 'ORDERED', 'PRIVILEGES', 'READ', 'REVERSEORDER', 'REVOKE',
+             'RIGHT', 'ROW', 'TO', 'TRACE', 'TRAILING', 'USER', 'USING', 'WRITE', 'WS']
+
+    words.append(DELIMITER)
+    words.extend(CHAPTER_NAMES)
+    reserved_words = reversed(sorted(words, key=len))
+    return reserved_words
 
 
-RESERVED_WORDS = get_reserved_words()
 RECENT_FILES = 'recent_file_list'
 RECENT_REPOSITORIES = 'recent_repositories_list'
 MAX_RECENT_FILES = 8

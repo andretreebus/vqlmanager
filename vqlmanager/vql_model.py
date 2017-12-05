@@ -13,13 +13,16 @@ Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
+__author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
-from vql_manager_core import *
+# standard library
+from pathlib import Path
+# other libs
+from vqlmanager.vql_manager_core import *
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QTreeWidget
-from chapter import Chapter
-from code_item import CodeItem
-from pathlib import Path
+from vqlmanager.chapter import Chapter
+from vqlmanager.code_item import CodeItem
 
 
 class VqlModel(QTreeWidget):
@@ -51,11 +54,17 @@ class VqlModel(QTreeWidget):
 
         # initialize by adding empty chapters
         self._add_chapters(CHAPTER_NAMES)
+        # changed is a boolean indicating a change in selection was made
         self.changed = False
+        # mode of operation: see mode variable flags in vql_manager_core
         self.mode = GUI_NONE
+        # storage_list to store items for different views
         self.storage_list = list()
+        # view stores the current view
         self.view = VQL_VIEW
+        # denodo_root is a reference to the root item of the denodo view
         self.denodo_root = Chapter(None, 'root')
+        # color_filter used to filter items
         self.color_filter = None
 
     def pack(self):

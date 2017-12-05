@@ -2,33 +2,33 @@
 # -*- coding: utf-8 -*-
 """
 VQLManagerWindow Class
-The main window GUI class for the app
-
+The main window GUI class for the application
 
 file: vqlmanagerwindow.py
-Dependencies: os shutil vql_model.py code_item.py vql_manager_core
+Dependencies: vqlmanager, PyQt5
 
 Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
+__author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
-# from os import makedirs, listdir, unlink, rmdir
+# standard library
 from pathlib import Path
 import subprocess
 import sys
 import asyncio
 from functools import partial
-
+# other libs
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
-from vql_manager_core import *
-from vql_model import VqlModel
-from code_item import CodeItem
+from vqlmanager.vql_manager_core import *
+from vqlmanager.vql_model import VqlModel
+from vqlmanager.code_item import CodeItem
 
 
 class VQLManagerWindow(QMainWindow):

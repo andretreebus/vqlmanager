@@ -20,11 +20,15 @@ Author: Andre Treebus
 Email: andretreebus@hotmail.com
 Last edited: November 2017
 """
+__author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
-from vql_manager_core import *
+# standard library
 from pathlib import Path
+# other libs
 from PyQt5.QtWidgets import QTreeWidgetItem
 from PyQt5.QtGui import QBrush
+from vqlmanager.vql_manager_core import *
+
 
 
 class CodeItem(QTreeWidgetItem):
