@@ -23,6 +23,7 @@ from vqlmanager.chapter import Chapter
 from vqlmanager.code_item import CodeItem
 from vqlmanager.vql_manager_core import *
 
+
 class VqlModel(QTreeWidget):
     """VqlModel class represents all objects in a Denodo database.
 
@@ -140,20 +141,18 @@ class VqlModel(QTreeWidget):
         code = [chapter.get_code_as_file(mode, selected) for chapter in self.chapters]
         return PROP_QUOTE + '\n'.join(code)
 
-    def get_part_logs(self, mode: int, folder: Path):
+    def get_part_logs(self, folder: Path):
         """Gives all part.log data.
 
         With log file names (key) and their content (values).
         The content is a list of paths to the code items in a chapter.
         This function is used to create a repository.
-        :param mode: the mode to select which code; either GUI_SELECT or GUI_COMPARE
-        :type mode: int
         :param folder: The folder to save the repo to
         :type folder: Path
         :return: Iterator with filepaths and content
         :rtype: generator of tuples: part_log_filepath, part_log_content
         """
-        result = (chapter.get_part_log(mode, folder) for chapter in self.chapters if chapter.is_selected())
+        result = (chapter.get_part_log(folder) for chapter in self.chapters if chapter.is_selected())
         return result
 
     def get_selected_code_files(self, mode: int, folder: Path)->List[Tuple[Path, str]]:

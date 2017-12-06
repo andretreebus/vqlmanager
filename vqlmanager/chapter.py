@@ -273,8 +273,6 @@ class Chapter(QTreeWidgetItem):
         The content is a list of file paths pointing to the code items in this chapter.
         The part.log files are used in a repository to ensure the same order of execution.
         Only the selected code items are included.
-        :param mode: The base folder for the repo
-        :type mode: int
         :param base_path: The base folder for the repo
         :type base_path:  Path
         :return: Two values, a file path and the content of the part.log file of this chapter

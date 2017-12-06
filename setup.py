@@ -1,3 +1,6 @@
+"""
+Setup file for creating distributions
+"""
 from setuptools import setup
 
 setup(
@@ -39,10 +42,27 @@ setup(
               'venv.lib.python3.6.site-packages.pip-9.0.1-py3.6.egg.pip._vendor.webencodings',
               'venv.lib.python3.6.site-packages.pip-9.0.1-py3.6.egg.pip._vendor.pkg_resources',
               'venv.lib.python3.6.site-packages.pip-9.0.1-py3.6.egg.pip.commands',
-              'venv.lib.python3.6.site-packages.pip-9.0.1-py3.6.egg.pip.operations', 'vqlmanager'],
-    url='',
+              'venv.lib.python3.6.site-packages.pip-9.0.1-py3.6.egg.pip.operations',
+              'vqlmanager',
+              'vqlmanager.images'],
+    url='https://github.com/andretreebus/vqlmanager',
     license=open('LICENCE.txt').read(),
     author='Andre Treebus',
     author_email='andretreebus@hotmail.com',
     description=open('README.md').read(),
+    classifiers=[
+        'Development Status :: 0.1 - Beta',
+        'Environment :: Console',
+        'Environment :: Web Environment',
+        'Intended Audience :: End Users/Desktop',
+        'Intended Audience :: Denodo Administrators',
+        'License :: OSI Approved :: Apache Software Licence Version 2',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: POSIX',
+        'Programming Language :: Python',
+        'Topic :: Communications :: Email',
+        'Topic :: Office/Business',
+        'Topic :: Software Development :: Bug Tracking',
+    ],
 )

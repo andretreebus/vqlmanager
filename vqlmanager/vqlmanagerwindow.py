@@ -22,9 +22,9 @@ from functools import partial
 # other libs
 from PyQt5.QtCore import QSize, QRect, QFileInfo, QTimer, QVariant, QSettings, QPoint
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
-from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView, QVBoxLayout
+from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox, QScrollArea
 from vqlmanager.vql_manager_core import *
 from vqlmanager.vql_model import VqlModel
@@ -133,7 +133,6 @@ class VQLManagerWindow(QMainWindow):
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
         self.setAttribute(Qt.WA_DeleteOnClose)  # close children on exit
-
         # root is the folder from which this file runs
         self._root = Path(QFileInfo(__file__).absolutePath())
         images = self._root / 'images'
@@ -707,7 +706,10 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-        color = translate_colors(self.select_button_labels[button.text()], to_text=False)
+        if button.text() == 'All':
+            color = None
+        else:
+            color = translate_colors(self.select_button_labels[button.text()], to_text=False)
         self.all_chapters_treeview.color_filter = color
         self.update_tree_widgets()
 
@@ -1108,7 +1110,8 @@ class VQLManagerWindow(QMainWindow):
                 self.error_message_box('Error', 'Error creating folder', str(error))
                 return None
 
-        if any([item_path.exists() for item_path, _ in self.all_chapters_treeview.get_selected_code_files(folder)]):
+        if any([item_path.exists() for item_path, _
+                in self.all_chapters_treeview.get_selected_code_files(self.get_mode(), folder)]):
             if not self.ask_overwrite():
                 return None
         logger.info('Got:' + str(folder))

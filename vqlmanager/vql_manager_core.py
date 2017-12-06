@@ -94,12 +94,18 @@ PROP_QUOTE = "# REQUIRES-PROPERTIES-FILE - # Do not remove this comment!\n#\n"
 
 # app_state flags
 class GuiType(QObject):
+    """
+    Global constants for the gui modes
+    """
     GUI_NONE = 1 << 1                  # initial or reset mode
     GUI_SELECT = 1 << 2           # gui set to selection mode
     GUI_COMPARE = 1 << 3          # gui set to compare, with a base model and a compare model
 
 
 class ModelState(QObject):
+    """
+    Global constants for the gui modes
+    """
     BASE_FILE = 1 << 4        # indicate that the base model is a single file
     BASE_REPO = 1 << 5        # indicate that the base model is a repository (folder structure)
     COMP_FILE = 1 << 6        # indicate that the base model is a single file
@@ -108,21 +114,26 @@ class ModelState(QObject):
     COMP_LOADED = 1 << 9      # indicate that the compare model is loaded
 
 
-# class SourceType(QObject):
-#     FILE = 1 << 10
-#     REPO = 1 << 11
-
 class SourceType(QObject):
+    """
+    Global constants for the gui modes
+    """
     FILE = ModelState.BASE_FILE | ModelState.COMP_FILE
     REPO = ModelState.BASE_REPO | ModelState.COMP_REPO
 
 
 class ViewType(QObject):
+    """
+    Global constants for the gui modes
+    """
     VQL_VIEW = 1 << 12
     DENODO_VIEW = 1 << 13
 
 
 class CodeView(QObject):
+    """
+    Global constants for the gui modes
+    """
     ORIGINAL_CODE = 1 << 14
     COMPARE_CODE = 1 << 15
     DIFF_CODE = 1 << 16

@@ -150,21 +150,45 @@ class CodeItem(QTreeWidgetItem):
         :return: html representation of teh difference
         :rtype: str
         """
-        def format_code(_code):
+        def format_code(_code: str)->str:
+            """
+            Formats a code piece as html
+            :param _code: The code to be formatted
+            :return: the html of the code
+            :rtype: str
+            """
             _code = _code.replace('<br>', '<br />\n')
             _code = _code.replace('&para;', '')
             _code = _code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
             return _code
 
-        def format_code2(_code):
+        def format_code2(_code: str)->str:
+            """
+            Formats a code piece as html
+            :param _code: The code to be formatted
+            :return: the html of the code
+            :rtype: str
+            """
             _code = _code.replace('\n', '<br />\n')
             _code = _code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
             return _code
 
-        def set_green(_code):
+        def set_green(_code: str)->str:
+            """
+            Formats a code piece as html to set it green
+            :param _code: The code to be formatted
+            :return: the html of the code
+            :rtype: str
+            """
             return '<span>' + new_diff_ins_indicator + _code + '</ins></span>'
 
-        def set_red(_code):
+        def set_red(_code: str)->str:
+            """
+            Formats a code piece as html to set it red
+            :param _code: The code to be formatted
+            :return: the html of the code
+            :rtype: str
+            """
             return '<span>' + new_diff_del_indicator + _code + '</del></span>'
 
         diff_ins_indicator = '<ins style="background:#e6ffe6;">'
