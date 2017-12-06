@@ -15,7 +15,6 @@ __author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
 # standard library
 from pathlib import Path
-from typing import List, Tuple, Union
 import subprocess
 import sys
 import asyncio
@@ -26,52 +25,86 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTreeWidgetItemIterator, qApp, QMenu, QPushButton
 from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QWidget, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QLabel, QTreeWidget, QTreeWidgetItem, QAbstractItemView, QVBoxLayout
-from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox, QScrollArea
 from vqlmanager.vql_manager_core import *
 from vqlmanager.vql_model import VqlModel
 from vqlmanager.code_item import CodeItem
 
 
 class DependencyViewer(QWidget):
-    def __init__(self, code_item: CodeItem, pos: QPoint, parent=None):
+    """
+    Dependency viewer: a window to investigate code objects that are dependent
+    on the currently selected, right mouse clicked item in the selection tree view
+    """
+    def __init__(self, mode: int, code_item: CodeItem, pos: QPoint, parent=None):
+        """
+        Class Constructor
+        :param mode: either GUI_SELECT or GUI_COMPARE
+        :param code_item: the code item whose dependees are shown
+        :param pos: pos of the window
+        :param parent: parent object for this window
+        """
 
-        def recurse(_code_item: CodeItem, _child: QTreeWidgetItem):
-            _child.setForeground(0, RED)
+        def recurse(n_recurses, _mode: int, _code_item: CodeItem, _child: QTreeWidgetItem):
+            n_recurses += 1
+            if n_recurses > 100:
+                return
             _child.setText(0, _code_item.chapter_name[:-1] + ' : ' + _code_item.object_name)
-            for _code_item1 in _code_item.dependees:
+            dependees = None
+            if _mode & GUI_SELECT:
+                dependees = _code_item.dependees
+            elif _mode & GUI_COMPARE:
+                dependees = _code_item.compare_dependees
+            for _code_item1 in dependees:
                 _child1 = _code_item1.clone()
-                _child1.setForeground(0, WHITE)
                 _child1.setText(0, _code_item1.chapter_name[:-1] + ' : ' + _code_item1.object_name)
                 _child.addChild(_child1)
-                recurse(_code_item1, _child1)
+                recurse(n_recurses, _mode, _code_item1, _child1)
 
         super(DependencyViewer, self).__init__(parent)
         # self.setGeometry(300, 400)
-        self.resize(300, 400)
+        self.resize(400, 400)
         self.move(pos)
         self.setMinimumSize(QSize(180, 240))
-        self.setWindowTitle('Depencency Viewer')
-        self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.Popup | Qt.FramelessWindowHint)
-        layout = QVBoxLayout(self)
+        if mode & GUI_SELECT:
+            self.setWindowTitle('Depencency Viewer')
+        elif mode & GUI_COMPARE:
+            self.setWindowTitle('Depencency Viewer Compare Code')
+
+        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
+        layout = QGridLayout(self)
 
         root_node = code_item.clone()
         header = 'Dependencies on ' + code_item.object_name
         self.dependency_tree = VQLManagerWindow.create_tree_widget(self, QTreeWidget, ITEM_FLAG_SEL, header=header)
-        recurse(code_item, root_node)
+        scroll = QScrollArea()
+        scroll.setWidget(self.dependency_tree)
+        recurse(0, mode, code_item, root_node)
+        children = root_node.takeChildren()
+        if children:
+            self.dependency_tree.addTopLevelItems(children)
+        else:
+            non_item = QTreeWidgetItem()
+            non_item.setText(0, 'None')
+            self.dependency_tree.addTopLevelItem(non_item)
 
-        self.dependency_tree.addTopLevelItem(root_node)
+        # self.dependency_tree.addTopLevelItem(root_node)
         self.dependency_tree.expandAll()
         VQLManagerWindow.remove_checkboxes(self.dependency_tree)
-        self.close_button = QPushButton('Close')
-
-        layout.addWidget(self.dependency_tree, Qt.AlignCenter)
-        layout.addWidget(self.close_button, Qt.AlignCenter)
+        layout.addWidget(self.dependency_tree, 0,0)
         self.setLayout(layout)
-        self.close_button.clicked.connect(self.close)
 
     @staticmethod
-    def get_viewer(code_item: CodeItem, pos: QPoint, parent=None):
-        viewer = DependencyViewer(code_item, pos, parent)
+    def get_viewer(mode: int, code_item: CodeItem, pos: QPoint, parent=None):
+        """
+        Returns the dependency viewer
+        :param mode: the mode
+        :param code_item: the code item whose depedees are shown
+        :param pos: position of the code_item
+        :param parent: parent
+        :return: None
+        """
+        viewer = DependencyViewer(mode, code_item, pos, parent)
         result = viewer.show()
         return result
 
@@ -102,9 +135,8 @@ class VQLManagerWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(images / 'splitter.png')))
         self.setWindowTitle(APPLICATION_NAME)
 
-        self.select_button_labels = dict([('All', white), ('Lost', red),
-                                          ('New', green), ('Same', white), ('Changed', yellow)])
-        self.diff_button_labels = dict([('Original', white), ('New', green), ('Changes', yellow)])
+        self.select_button_labels = {'All': white, 'Lost': red, 'New': green, 'Same': white, 'Changed': yellow}
+        self.diff_button_labels = {'Original': white, 'New': green, 'Changes': yellow}
 
         # instantiate widgets
         self.mainwidget = QWidget(self, flags=Qt.Widget)
@@ -768,7 +800,14 @@ class VQLManagerWindow(QMainWindow):
         if pos:
             item = self.all_chapters_treeview.itemAt(pos)
             if item.class_type == CodeItem:
-                DependencyViewer.get_viewer(item, pos, self)
+                if self._mode & GUI_SELECT:
+                    DependencyViewer.get_viewer(self._mode, item, pos, self)
+                elif self._mode & GUI_COMPARE:
+                    if item.compare_code:
+                        DependencyViewer.get_viewer(self._mode, item, pos, self)
+                    else:
+                        self.message_to_user('This item does not exist in the new (compare) code base')
+
 
     @staticmethod
     def run(task):
@@ -927,11 +966,15 @@ class VQLManagerWindow(QMainWindow):
 
         if self._mode & BASE_LOADED:
             if self.denodo_folder_structure_action.isChecked():
-                logger.debug('Switching view to Denodo View')
-                self.denodo_folder_structure_action.setText('Switch to VQL View')
-                self.all_chapters_treeview.change_view(self._mode | DENODO_VIEW)
+                if self.all_chapters_treeview.change_view(self._mode | DENODO_VIEW):
+                    self.denodo_folder_structure_action.setText('Switch to VQL View')
+                    logger.debug('Switching to Denodo View')
+                else:
+                    self.message_to_user('Denodo view not possible. Missing folders in the code.')
+                    self.denodo_folder_structure_action.setChecked(False)
+                    logger.debug('Switch to Denodo View aborted')
             else:
-                logger.debug('Switching view to VQL View')
+                logger.debug('Switching to VQL View')
                 self.denodo_folder_structure_action.setText('Switch to DENODO View')
                 self.all_chapters_treeview.change_view(self._mode | VQL_VIEW)
             self.update_tree_widgets()

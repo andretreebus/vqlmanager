@@ -36,7 +36,8 @@ class CodeItem(QTreeWidgetItem):
     It inherits from QTreeWidgetItem, so it can display in a QTreeWidget.
     Basically a bag for pieces of Denodo code.
     """
-    def __init__(self, parent: QTreeWidgetItem, chapter_name: str, mode: int, code=None, compare_code=None, preceding=None):
+    def __init__(self, parent: QTreeWidgetItem, chapter_name: str, mode: int,
+                 code=None, compare_code=None, preceding=None):
         """CodeItem Class constructor.
 
         :param parent: The object owning this object
@@ -121,7 +122,10 @@ class CodeItem(QTreeWidgetItem):
                 else:
                     self.set_color(YELLOW)
             else:
-                self.set_color(RED)
+                if self.mode & GUI_COMPARE:
+                    self.set_color(RED)
+                else:
+                    self.set_color(RED) if self.dependees else self.set_color(WHITE)
         else:
             if self.compare_code:
                 self.set_color(GREEN)
@@ -259,7 +263,7 @@ class CodeItem(QTreeWidgetItem):
                 self.mode -= COMP_REPO
             if self.mode & COMP_FILE:
                 self.mode -= COMP_FILE
-            self.set_compare_code('', 0)
+            self.set_compare_code('', self.mode | GUI_SELECT)
 
     def suicide(self):
         """Asks dad to shoot you.

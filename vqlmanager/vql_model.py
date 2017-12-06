@@ -17,14 +17,11 @@ __author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
 # standard library
 from pathlib import Path
-from typing import Tuple, Generator
 # other libs
-from vqlmanager.vql_manager_core import *
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QTreeWidget
 from vqlmanager.chapter import Chapter
 from vqlmanager.code_item import CodeItem
-
+from vqlmanager.vql_manager_core import *
 
 class VqlModel(QTreeWidget):
     """VqlModel class represents all objects in a Denodo database.
@@ -141,7 +138,7 @@ class VqlModel(QTreeWidget):
         code = [chapter.get_code_as_file(selected) for chapter in self.chapters]
         return PROP_QUOTE + '\n'.join(code)
 
-    def get_part_logs(self, folder: Path)->Generator[Tuple[Path, str]]:
+    def get_part_logs(self, folder: Path):
         """Gives all part.log data.
 
         With log file names (key) and their content (values).
@@ -289,8 +286,7 @@ class VqlModel(QTreeWidget):
         if gui & GUI_SELECT:
             for _, code_item in self.get_code_items():
                 if code_item.dependees:
-                    pass
-                    # code_item.set_color(RED)
+                    code_item.set_color(RED)
             for chapter in self.chapters:
                 chapter.set_gui(gui)
                 chapter.set_color_based_on_children(gui, color=WHITE)
@@ -416,7 +412,10 @@ class VqlModel(QTreeWidget):
 
             # construct list of dependees, of which this item is a parent
             for item_dependency in dependencies:
-                item_dependency.dependees.append(item)
+                if gui & GUI_SELECT:
+                    item_dependency.dependees.append(item)
+                elif gui & GUI_COMPARE:
+                    item_dependency.compare_dependees.append(item)
 
             dependees = self.unique_list(dependees)
 
@@ -444,7 +443,7 @@ class VqlModel(QTreeWidget):
                 new_list.append(item)
         return new_list
 
-    def change_view(self, mode: int):
+    def change_view(self, mode: int)->bool:
         """Method that swaps the tree items from VQL View to Denodo file structure view and back.
 
         The actual switch is done in switch_view function.
@@ -452,18 +451,19 @@ class VqlModel(QTreeWidget):
 
         :param mode: the mode flag with bits for the new view either VQL_VIEW or DENODO_VIEW
         :type mode: int
-        :return: None
-        :rtype: None
+        :return: Success or not
+        :rtype: bool
         """
 
         gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)
         if self.view & mode:
-            return
+            return True
 
         if mode & VQL_VIEW:
             if self.storage_list:
                 self.switch_view()
                 self.view = VQL_VIEW
+                return True
             else:
                 # build a VQL_View
                 pass
@@ -471,10 +471,12 @@ class VqlModel(QTreeWidget):
             if self.storage_list:
                 self.switch_view()
                 self.view = DENODO_VIEW
+                return True
             else:
                 # build denodo view
-                self.build_denodo_view(gui)
-                self.change_view(mode)
+                if self.build_denodo_view(gui):
+                    self.change_view(mode)
+        return False
 
     def switch_view(self):
         """Method to switch view between VQL or Denodo file structure.
@@ -489,7 +491,7 @@ class VqlModel(QTreeWidget):
         self.root.addChildren(self.storage_list)
         self.storage_list = temp
 
-    def build_denodo_view(self, gui: int):
+    def build_denodo_view(self, gui: int)->bool:
         """Method that builds up the Denodo folder structure.
 
         Using chapter items as folders and adds code_items as children.
@@ -497,8 +499,8 @@ class VqlModel(QTreeWidget):
         and shown when the view is switched.
         :param gui: flag to indicate compare or normal select operations
         :type gui: int
-        :return: None
-        :rtype: none
+        :return: Success or not
+        :rtype: bool
         """
 
         folders = dict()
@@ -511,11 +513,6 @@ class VqlModel(QTreeWidget):
             else:
                 folders[code_item.denodo_folder].append(code_item)
 
-        # Todo: if the folders contain paths that have no parents yet an error occurs
-        # Todo: example: /source/presentatie_laag/vma
-        # Todo: without the vql file mentioning /source, /source/presentatie_laag
-
-        # print(folders.keys())
         temp_widget = VqlModel(None)
         temp_root = temp_widget.denodo_root
 
@@ -523,31 +520,35 @@ class VqlModel(QTreeWidget):
         parent_item = temp_root
         folder_item = None
         for folder, code_items in folders.items():
-            folder_split = folder.split('/')
-            last_folder = folder_split[-1]
-            new_depth = len(folder_split)
-            if new_depth == 1:
-                parent_item = temp_root
+            if folder:
+                folder_split = folder.split('/')
+                last_folder = folder_split[-1]
+                new_depth = len(folder_split)
+                if new_depth == 1:
+                    parent_item = temp_root
+                else:
+                    if new_depth > old_depth:
+                        parent_item = folder_item
+                folder_item = Chapter(parent_item, last_folder)
+                if parent_item is not temp_root:
+                    parent_item.chapter_items.append(folder_item)
+                    folder_item.gui = parent_item.gui
+                old_depth = new_depth
+
+                for code_item in code_items:
+                    item = CodeItem(folder_item, code_item.chapter_name, code_item.mode,
+                                    code=code_item.code, compare_code=code_item.compare_code)
+
+                    folder_item.code_items.append(item)
+
+                    item.setCheckState(0, code_item.checkState(0))
+                folder_item.set_gui(gui)
+                folder_item.set_color_based_on_children(gui)
             else:
-                if new_depth > old_depth:
-                    parent_item = folder_item
-            folder_item = Chapter(parent_item, last_folder)
-            if parent_item is not temp_root:
-                parent_item.chapter_items.append(folder_item)
-                folder_item.gui = parent_item.gui
-            old_depth = new_depth
-
-            for code_item in code_items:
-                item = CodeItem(folder_item, code_item.chapter_name, code_item.mode,
-                                code=code_item.code, compare_code=code_item.compare_code)
-
-                folder_item.code_items.append(item)
-
-                item.setCheckState(0, code_item.checkState(0))
-            folder_item.set_gui(gui)
-            folder_item.set_color_based_on_children(gui)
+                return False
 
         self.storage_list = temp_root.takeChildren()
+        return True
 
     def remove_compare(self):
         """Method to remove compare code .
