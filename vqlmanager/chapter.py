@@ -241,20 +241,28 @@ class Chapter(QTreeWidgetItem):
 
     # export functions
     # to file
-    def get_code_as_file(self, selected: bool)->str:
+    def get_code_as_file(self, mode: int, selected: bool)->str:
         """Returns the combined Denodo code for a whole chapter.
 
         This function adds a chapter header, and only selected code items
-
+        :param mode: either GUI_SELECT or GUI_COMPARE ; what code to return
+        :type mode: int
         :param selected: Indicator is True if only selected items are requested
         :type selected: bool
         :return: string with code content
         :rtype: str
         """
+        code = []
         if selected and self.is_selected():
-            code = [code_item.code for code_item in self.code_items if code_item.is_selected()]
+            if mode & GUI_SELECT:
+                code = [code_item.code for code_item in self.code_items if code_item.is_selected()]
+            elif mode & GUI_COMPARE:
+                code = [code_item.compare_code for code_item in self.code_items if code_item.is_selected()]
         else:
-            code = [code_item.code for code_item in self.code_items]
+            if mode & GUI_SELECT:
+                code = [code_item.code for code_item in self.code_items]
+            elif mode & GUI_COMPARE:
+                code = [code_item.compare_code for code_item in self.code_items]
         return self.header + '\n'.join(code)
 
     # to repository
@@ -265,9 +273,10 @@ class Chapter(QTreeWidgetItem):
         The content is a list of file paths pointing to the code items in this chapter.
         The part.log files are used in a repository to ensure the same order of execution.
         Only the selected code items are included.
-
-        :param: base_path: The base folder for the repo
-        :type: Path
+        :param mode: The base folder for the repo
+        :type mode: int
+        :param base_path: The base folder for the repo
+        :type base_path:  Path
         :return: Two values, a file path and the content of the part.log file of this chapter
         :rtype: tuple Path, str
         """

@@ -127,36 +127,41 @@ class VqlModel(QTreeWidget):
             for code_item in chapter.code_items:
                 yield (chapter, code_item)
 
-    def get_code_as_file(self, selected: bool)->str:
+    def get_code_as_file(self, mode: int, selected: bool)->str:
         """Function that puts the code content in a single .vql file of all checked/selected items.
+        :param mode: GUI indicator saving either compare code or base code GUI_SELECT or GUI_COMPARE
+        :type mode: int
         :param selected: Only selected items or not
         :type selected: bool
         :return: string of code content
         :rtype: str
         """
 
-        code = [chapter.get_code_as_file(selected) for chapter in self.chapters]
+        code = [chapter.get_code_as_file(mode, selected) for chapter in self.chapters]
         return PROP_QUOTE + '\n'.join(code)
 
-    def get_part_logs(self, folder: Path):
+    def get_part_logs(self, mode: int, folder: Path):
         """Gives all part.log data.
 
         With log file names (key) and their content (values).
         The content is a list of paths to the code items in a chapter.
         This function is used to create a repository.
-
+        :param mode: the mode to select which code; either GUI_SELECT or GUI_COMPARE
+        :type mode: int
         :param folder: The folder to save the repo to
         :type folder: Path
         :return: Iterator with filepaths and content
         :rtype: generator of tuples: part_log_filepath, part_log_content
         """
-        result = (chapter.get_part_log(folder) for chapter in self.chapters if chapter.is_selected())
+        result = (chapter.get_part_log(mode, folder) for chapter in self.chapters if chapter.is_selected())
         return result
 
-    def get_selected_code_files(self, folder: Path)->List[Tuple[Path, str]]:
+    def get_selected_code_files(self, mode: int, folder: Path)->List[Tuple[Path, str]]:
         """Function for looping over all selected code items in the model.
 
         This function is used to write the repository
+        :param mode: the mode to select which code; either GUI_SELECT or GUI_COMPARE
+        :type mode: int
         :param folder: the proposed folder for storage
         :type folder: Path
         :return: an iterator with two unpacked values: filepath and code content
@@ -169,7 +174,12 @@ class VqlModel(QTreeWidget):
             chapter_folder = folder / chapter.name
             for code_item in items:
                 item_path = code_item.get_file_path(chapter_folder)
-                item_code = code_item.code
+                if mode & GUI_SELECT:
+                    item_code = code_item.code
+                elif mode & GUI_COMPARE:
+                    item_code = code_item.compare_code
+                else:
+                    item_code = ''
                 item_path_code.append((item_path, item_code))
         return item_path_code
 

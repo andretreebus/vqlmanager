@@ -170,21 +170,21 @@ def translate_colors(item_color: Union[str, QBrush], to_text=True)->Union[str, Q
     color = None
     if to_text:
         if item_color == RED:
-            color = "red"
+            color = red
         elif item_color == GREEN:
-            color = "green"
+            color = green
         elif item_color == YELLOW:
-            color = "yellow"
+            color = yellow
         elif item_color == WHITE:
-            color = "white"
+            color = white
     else:
-        if item_color == "red":
+        if item_color == red:
             color = RED
-        elif item_color == "green":
+        elif item_color == green:
             color = GREEN
-        elif item_color == "yellow":
+        elif item_color == yellow:
             color = YELLOW
-        elif item_color == "white":
+        elif item_color == white:
             color = WHITE
     return color
 

@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialo
 from vqlmanager.vql_manager_core import *
 from vqlmanager.vql_model import VqlModel
 from vqlmanager.code_item import CodeItem
+from vqlmanager.chapter import Chapter
 
 
 class DependencyViewer(QWidget):
@@ -46,6 +47,14 @@ class DependencyViewer(QWidget):
         """
 
         def recurse(n_recurses, _mode: int, _code_item: CodeItem, _child: QTreeWidgetItem):
+            """
+
+            :param n_recurses:
+            :param _mode:
+            :param _code_item:
+            :param _child:
+            :return:
+            """
             n_recurses += 1
             if n_recurses > 100:
                 return
@@ -808,7 +817,6 @@ class VQLManagerWindow(QMainWindow):
                     else:
                         self.message_to_user('This item does not exist in the new (compare) code base')
 
-
     @staticmethod
     def run(task):
         """Function to start asynchronous tasks.
@@ -871,7 +879,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             qApp.quit()
 
-    def on_selection_changed(self, item: QTreeWidgetItem, *_):
+    def on_selection_changed(self, item: Union[Chapter, CodeItem], *_):
         """Event handler for changes of the selection (check boxes) in the all_chapters_treeview (VqlModel).
 
         :param item: The item that changed in the all_chapters_treeview
@@ -880,7 +888,39 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        def sel(_item: Union[Chapter, CodeItem])->bool:
+            """
+            if an item is selected
+            :param _item: the item
+            :return:
+            """
+            return False if _item.checkState(0) == UNCHECKED else True
+
         logger.debug('Item clicked on Selection Pane: ' + item.text(0))
+        mode = self.get_mode()
+
+        if mode & GUI_SELECT:
+            if item.class_type == CodeItem:
+                if not sel(item):
+                    if any([sel(dependee) for dependee in item.dependees]):
+                        self.message_to_user('This item has other items that are dependent on it.')
+
+        elif mode & GUI_COMPARE:
+            if item.class_type == CodeItem:
+                if sel(item):
+                    if not item.compare_code:
+                        item.compare_code = item.code
+                        items = {code_item.object_name for code_item in item.dependencies}
+                        dependencies_not_met = [item for item in items if not item.compare_code or not sel(item)]
+                        if any(dependencies_not_met):
+                            self.message_to_user('This item has dependencies not met. '
+                                                 'Check these: ' + '; '.join(dependencies_not_met))
+                else:
+                    dependees_orphaned = [sel(dependee) for dependee in item.compare_dependees]
+                    if any(dependees_orphaned):
+                        self.message_to_user('This item has other items that are dependent on it.'
+                                             'Check these: ' + '; '.join(dependees_orphaned))
+
         self.all_chapters_treeview.changed = True
         self.update_timer.start(100)
 
@@ -1365,12 +1405,13 @@ class VQLManagerWindow(QMainWindow):
         :return: boolean on success
         :rtype: bool
         """
-        logger.debug(f"Saving model to file in {file}")
+
+        logger.debug(f"Saving model to file in {file} in mode: {show_mode(self.get_mode())}")
         tree = self.all_chapters_treeview
 
         self.statusBar.showMessage("Saving")
         tree.blockSignals(True)
-        content = tree.get_code_as_file(selected=True)
+        content = tree.get_code_as_file(self.get_mode(), selected=True)
         tree.blockSignals(False)
         if content:
             if await self.write_file(file, content):
@@ -1391,7 +1432,7 @@ class VQLManagerWindow(QMainWindow):
         :return: boolean on success
         :rtype bool
         """
-        logger.debug(f"Saving model to repository in folder {folder}")
+        logger.debug(f"Saving model to repository in folder {folder} in mode: {show_mode(self.get_mode())}")
         self.statusBar.showMessage("Saving")
         if not folder:
             self.statusBar.showMessage("Save Error")
@@ -1426,7 +1467,7 @@ class VQLManagerWindow(QMainWindow):
                 logger.debug("Saved not OK")
                 return False
 
-        for file_path, content in tree.get_selected_code_files(folder):
+        for file_path, content in tree.get_selected_code_files(self.get_mode(), folder):
             if not content:
                 self.statusBar.showMessage("Save Error")
                 logger.debug("Saved not OK")
@@ -1551,6 +1592,11 @@ class VQLManagerWindow(QMainWindow):
 
     @staticmethod
     def remove_checkboxes(tree: QTreeWidget):
+        """
+
+        :param tree:
+        :return:
+        """
         item_iterator = QTreeWidgetItemIterator(tree)
         while item_iterator.value():
             item = item_iterator.value()
