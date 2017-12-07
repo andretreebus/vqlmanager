@@ -249,7 +249,7 @@ class VQLManagerWindow(QMainWindow):
         self.setup_ui()
 
         # Initialize class properties ###########################################################################
-
+        self.last_clicked_class_type = None
         self.working_folder = None
         self.base_repository_file = None
         self.base_repository_folder = None
@@ -513,6 +513,7 @@ class VQLManagerWindow(QMainWindow):
         self.help_menu.addAction(self.about_qt_action)
 
         # Callbacks Slots and Signals #####################################################
+        self.all_chapters_treeview.itemClicked.connect(self.on_selection_clicked)
         self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
         self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
 
@@ -881,6 +882,17 @@ class VQLManagerWindow(QMainWindow):
         else:
             qApp.quit()
 
+    def on_selection_clicked(self, item: Union[Chapter, CodeItem], *_):
+        """Event handler for changes of the selection (check boxes) in the all_chapters_treeview (VqlModel).
+
+        :param item: The item that changed in the all_chapters_treeview
+        :type item: QTreeWidgetItem
+        :param _: not used
+        :return: None
+        :rtype: None
+        """
+        self.last_clicked_class_type = item.class_type
+
     def on_selection_changed(self, item: Union[Chapter, CodeItem], *_):
         """Event handler for changes of the selection (check boxes) in the all_chapters_treeview (VqlModel).
 
@@ -902,13 +914,13 @@ class VQLManagerWindow(QMainWindow):
         mode = self.get_mode()
 
         if mode & GUI_SELECT:
-            if item.class_type == CodeItem:
+            if self.last_clicked_class_type == CodeItem:
                 if not sel(item):
                     if any([sel(dependee) for dependee in item.dependees]):
                         self.message_to_user('This item has other items that are dependent on it.')
 
         elif mode & GUI_COMPARE:
-            if item.class_type == CodeItem:
+            if self.last_clicked_class_type == CodeItem:
                 if sel(item):
                     if not item.compare_code:
                         item.compare_code = item.code

@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name='vqlmanager',
-    version='0.1dev',
+    version='0.1.dev0',
     packages=['venv.lib.python3.6.site-packages.PyQt5', 'venv.lib.python3.6.site-packages.PyQt5.uic',
               'venv.lib.python3.6.site-packages.PyQt5.uic.Loader', 'venv.lib.python3.6.site-packages.PyQt5.uic.port_v2',
               'venv.lib.python3.6.site-packages.PyQt5.uic.port_v3',
@@ -66,3 +66,5 @@ setup(
         'Topic :: Software Development :: Bug Tracking',
     ],
 )
+
+# bash -cl "/venv/bin/python /setup.py bdist_wininst --bdist-dir=/tmp --dist-dir=/build --bitmap=/vqlmanager/images/splitter.png --title="VQL Manager" --user-access-control=auto"

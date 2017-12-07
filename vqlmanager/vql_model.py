@@ -379,10 +379,27 @@ class VqlModel(QTreeWidget):
         searches = list()
         searches.append(('WRAPPERS', 'DATASOURCES', f"datasourcename={place_holder}"))
         searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (jdbc {place_holder})"))
-        searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (df ' {place_holder})"))
+        searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (df {place_holder})"))
         searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (ldap {place_holder})"))
-        searches.append(('VIEWS', 'BASE VIEWS', f"from {place_holder}"))
-        searches.append(('VIEWS', 'VIEWS', f"from {place_holder}"))
+
+        for i in range(15):
+            parentheses = '(' * i
+            searches.append(('VIEWS', 'BASE VIEWS', f"from {parentheses}{place_holder}"))
+            searches.append(('VIEWS', 'BASE VIEWS', f"join {parentheses}{place_holder}"))
+        # searches.append(('VIEWS', 'BASE VIEWS', f"from {place_holder}"))
+        # searches.append(('VIEWS', 'BASE VIEWS', f"from ({place_holder}"))
+        # searches.append(('VIEWS', 'BASE VIEWS', f"join {place_holder}"))
+        searches.append(('VIEWS', 'BASE VIEWS', f"set implementation {place_holder}"))
+        searches.append(('VIEWS', 'BASE VIEWS', f"datamovementplan = {place_holder}"))
+
+        # searches.append(('VIEWS', 'VIEWS', f"from {place_holder}"))
+        for i in range(15):
+            parentheses = '(' * i
+            searches.append(('VIEWS', 'VIEWS', f"from {parentheses}{place_holder}"))
+            searches.append(('VIEWS', 'VIEWS', f"join {parentheses}{place_holder}"))
+        searches.append(('VIEWS', 'VIEWS', f"set implementation {place_holder}"))
+        searches.append(('VIEWS', 'VIEWS', f"datamovementplan = {place_holder}"))
+
         searches.append(('ASSOCIATIONS', 'VIEWS', f" {place_holder} "))
 
         # perform the searches and store dependencies
