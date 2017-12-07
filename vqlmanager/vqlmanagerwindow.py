@@ -458,7 +458,7 @@ class VQLManagerWindow(QMainWindow):
 
         # Reset everything
         self.reset_action.setStatusTip('Reset the application to a clean state')
-        self.reset_action.triggered.connect(lambda: self.on_reset())
+        self.reset_action.triggered.connect(self.on_reset)
 
         self.about_action.setStatusTip("Show the application's About box")
         self.about_action.triggered.connect(self.on_about_vql_manager)
@@ -875,7 +875,7 @@ class VQLManagerWindow(QMainWindow):
 
         app_path = self._root / 'vql_manager.py'
         try:
-            subprocess.Popen([sys.executable, app_path])
+            subprocess.Popen([sys.executable, str(app_path)])
         except OSError as exception:
             print('ERROR: could not restart application:')
             print('  %s' % str(exception))
