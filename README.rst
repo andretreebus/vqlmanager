@@ -1,4 +1,5 @@
-# VQL Manager
+VQL Manager
+===========
 An Application to manage Denodo scripts
 This application supports:
 > Splitting up code to create a repository
@@ -18,51 +19,54 @@ and control over the codebase.
 This is achieved by splitting up the single exported vql files per database 
 into smaller pieces. Possible merge conflicts are more easily located and solved.
 
-# Installation:
+Installation
+------------
 Install python3.6 or later from the official python.org
 Open command prompt and create a virtual environment "venv" in some folder
 where you want the application installed.
 
 on Linux
-* python3 -m venv /path/to/new/virtual/environment
+    python3 -m venv /path/to/new/virtual/environment
 
 on Windows
-* python3 -m venv C:\path\to\new\virtual\environment
+    python3 -m venv C:\path\to\new\virtual\environment
 
 on Linux activate the virtual environment with:
-source /path/to/new/virtual/environment/bin/activate
+    source /path/to/new/virtual/environment/bin/activate
 
 on Windows activate the virtual environment with:
-C:\path\to\new\virtual\environment\Scripts\activate.bat
+    C:\path\to\new\virtual\environment\Scripts\activate.bat
 
 
 pip and setuptools will be available in the new environment by default
 
 Install wheel:
-* pip install wheel
+    pip install wheel
 
 Install PyQt5 and QDarkStyle.
-* pip install PyQt5
-* pip install qdarkstyle (or QDarkStyle)
+    pip install PyQt5
+    pip install qdarkstyle (or QDarkStyle)
 
 PyQt will install sip as well.
 
 I had to restart my pc before it worked.
 
-# Execution
-To run this application just start up the main entry: vqlmanager.py 
+Execution
+---------
+To run this application just start up the main entry: vqlmanager.py
 Switch to the folder:
 
-* cd C:\path\to\new\virtual\environment
+    cd C:\path\to\new\virtual\environment
 
 and run the program
 
-* python vqlmanager.py
+    python vqlmanager.py
 
 You can make a link on your desktop to start the app
 Start the program from the the environment folder.
 
-# Using the application
+Using the application
+---------------------
 The application can be used to support two processes:
 
 1. making selections
