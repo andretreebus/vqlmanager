@@ -780,7 +780,7 @@ class VQLManagerWindow(QMainWindow):
 
         elif new_mode & GUI_COMPARE:
             if not current_mode & BASE_LOADED:  # there is a base model
-                self.message_to_user("No repository loaded yet")
+                self.message_to_user("No repository loaded yet", parent=self)
                 return
 
             if current_mode & COMP_LOADED:  # there is a compare going on
@@ -818,7 +818,7 @@ class VQLManagerWindow(QMainWindow):
                     if item.compare_code:
                         DependencyViewer.get_viewer(self._mode, item, pos, self)
                     else:
-                        self.message_to_user('This item does not exist in the new (compare) code base')
+                        self.message_to_user('This item does not exist in the new (compare) code base', parent=self)
 
     @staticmethod
     def run(task):
@@ -846,7 +846,7 @@ class VQLManagerWindow(QMainWindow):
         logger.info(f"Saving file or repository in {show_mode(save_mode)} mode.")
         current_mode = self.get_mode()
         if not current_mode & BASE_LOADED:
-            self.message_to_user("No repository loaded yet")
+            self.message_to_user("No repository loaded yet", parent=self)
             return
 
         if save_mode & FILE:
@@ -877,8 +877,7 @@ class VQLManagerWindow(QMainWindow):
         try:
             subprocess.Popen([sys.executable, str(app_path)])
         except OSError as exception:
-            print('ERROR: could not restart application:')
-            print('  %s' % str(exception))
+            self.error_message_box('Restart Error', 'ERROR: could not restart application:', str(exception), parent=self)
         else:
             qApp.quit()
 
@@ -917,7 +916,7 @@ class VQLManagerWindow(QMainWindow):
             if self.last_clicked_class_type == CodeItem:
                 if not sel(item):
                     if any([sel(dependee) for dependee in item.dependees]):
-                        self.message_to_user('This item has other items that are dependent on it.')
+                        self.message_to_user('This item has other items that are dependent on it.', parent=self)
 
         elif mode & GUI_COMPARE:
             if self.last_clicked_class_type == CodeItem:
@@ -928,12 +927,12 @@ class VQLManagerWindow(QMainWindow):
                         dependencies_not_met = [item for item in items if not item.compare_code or not sel(item)]
                         if any(dependencies_not_met):
                             self.message_to_user('This item has dependencies not met. '
-                                                 'Check these: ' + '; '.join(dependencies_not_met))
+                                                 'Check these: ' + '; '.join(dependencies_not_met), parent=self)
                 else:
                     dependees_orphaned = [sel(dependee) for dependee in item.compare_dependees]
                     if any(dependees_orphaned):
                         self.message_to_user('This item has other items that are dependent on it.'
-                                             'Check these: ' + '; '.join(dependees_orphaned))
+                                             'Check these: ' + '; '.join(dependees_orphaned), parent=self)
 
         self.all_chapters_treeview.changed = True
         self.update_timer.start(100)
@@ -1024,7 +1023,7 @@ class VQLManagerWindow(QMainWindow):
                     self.denodo_folder_structure_action.setText('Switch to VQL View')
                     logger.debug('Switching to Denodo View')
                 else:
-                    self.message_to_user('Denodo view not possible. Missing folders in the code.')
+                    self.message_to_user('Denodo view not possible. Missing folders in the code.', parent=self)
                     self.denodo_folder_structure_action.setChecked(False)
                     logger.debug('Switch to Denodo View aborted')
             else:
@@ -1060,11 +1059,11 @@ class VQLManagerWindow(QMainWindow):
         filename = Path(str(filename))
 
         if not filename.exists():
-            self.message_to_user("File does not exist")
+            self.message_to_user("File does not exist", parent=self)
             return None
 
         if not filename.suffix == '.vql':
-            self.message_to_user("This file has the wrong extension")
+            self.message_to_user("This file has the wrong extension", parent=self)
             return None
 
         logger.info('Got: ' + str(filename))
@@ -1090,7 +1089,7 @@ class VQLManagerWindow(QMainWindow):
             return None
         folder = Path(str(folder))
         if not folder.is_dir():
-            self.message_to_user("No folder found")
+            self.message_to_user("No folder found", parent=self)
             return None
         logger.info('Got:' + str(folder))
         return folder
@@ -1119,7 +1118,7 @@ class VQLManagerWindow(QMainWindow):
                 folder.mkdir(parents=True)
                 return folder
             except OSError as error:
-                self.error_message_box('Error', 'Error creating folder', str(error))
+                self.error_message_box('Error', 'Error creating folder', str(error), parent=self)
                 return None
 
         if any([item_path.exists() for item_path, _
@@ -1160,15 +1159,17 @@ class VQLManagerWindow(QMainWindow):
         return filename
 
     # General purpose dialogs
-
-    def message_to_user(self, message: str):
+    @staticmethod
+    def message_to_user(message: str, parent=None):
         """General Messagebox functionality.
-
+        :param message: The message to show to the user
+        :type message: str
+        :param parent: The owner widget of this message box
         :return: None
         :rtype: None
         """
         logger.debug('Message to user: ' + message)
-        msg = QMessageBox(self)
+        msg = QMessageBox(parent)
         msg.setWindowTitle("You got a message!")
         msg.setIcon(QMessageBox.Question)
         msg.setText("<strong>" + message + "<strong>")
@@ -1217,7 +1218,8 @@ class VQLManagerWindow(QMainWindow):
         else:
             return False
 
-    def error_message_box(self, title: str, text: str, error: str):
+    @staticmethod
+    def error_message_box(title: str, text: str, error: str, parent=None):
         """General messagebox if an error happened.
 
         :param title: Title of dialog window
@@ -1226,11 +1228,13 @@ class VQLManagerWindow(QMainWindow):
         :type text: str
         :param error: the error text generated by python
         :type error: str
+        :param parent: The parent widget owning this messagebox
+        :type parent: QWidget
         :return: None
         :rtype: None
         """
         logger.error(title + str(error))
-        msg = QMessageBox(self)
+        msg = QMessageBox(parent)
         msg.setWindowTitle(title)
         msg.setIcon(QMessageBox.Critical)
         msg.setText("<strong>An error has occurred!<strong>")
@@ -1256,7 +1260,8 @@ class VQLManagerWindow(QMainWindow):
             with file.open() as f:
                 content = f.read()
         except (OSError, IOError) as error:
-            self.error_message_box("Error", "An error occurred during reading of file: " + str(file), str(error))
+            self.error_message_box("Error", "An error occurred during reading of file: "
+                                   + str(file), str(error), parent=self)
         if content:
             logger.debug(f"{str(file)} with {len(content)} characters read.")
         return content
@@ -1276,7 +1281,8 @@ class VQLManagerWindow(QMainWindow):
             try:
                 file.unlink()
             except (OSError, IOError) as error:
-                self.error_message_box("Error", "An error occurred during removal of file : " + str(file), str(error))
+                self.error_message_box("Error", "An error occurred during removal of file : "
+                                       + str(file), str(error), parent=self)
                 self.statusBar.showMessage("Save error")
                 return False
 
@@ -1286,7 +1292,8 @@ class VQLManagerWindow(QMainWindow):
                 logger.debug(f"Saved {written} characters to {str(file)}")
                 return True
         except (OSError, IOError) as error:
-            self.error_message_box("Error", "An error occurred during writing of file: " + str(file), str(error))
+            self.error_message_box("Error", "An error occurred during writing of file: "
+                                   + str(file), str(error), parent=self)
             return False
 
     # Saving and loading models
@@ -1351,7 +1358,7 @@ class VQLManagerWindow(QMainWindow):
         if not matching_folders:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             message = "No repository found. Did not find any matching sub folders."
-            self.message_to_user(message)
+            self.message_to_user(message, parent=self)
             self.statusBar.showMessage(message)
             return
 
@@ -1362,7 +1369,7 @@ class VQLManagerWindow(QMainWindow):
         if non_existing_part_files:
             missing = ', '.join(non_existing_part_files)
             self.message_to_user(f"{LOG_FILE_NAME} file(s): {missing} not found. "
-                                 f"Make sure your repository is not corrupt")
+                                 f"Make sure your repository is not corrupt", parent=self)
 
         all_code_files = list()
         for part_file in existing_part_files:
@@ -1371,7 +1378,8 @@ class VQLManagerWindow(QMainWindow):
             non_existing_code_files = [str(code_file) for code_file in code_files if not code_file.is_file()]
             if non_existing_code_files:
                 missing = ', '.join(non_existing_code_files)
-                self.message_to_user(f"Code file(s): {missing} not found. Make sure your repository is not corrupt")
+                self.message_to_user(f"Code file(s): {missing} not found. "
+                                     f"Make sure your repository is not corrupt", parent=self)
             existing_code_files = [(str(code_file.parent.name), code_file)
                                    for code_file in code_files if code_file.is_file()]
             all_code_files.extend(existing_code_files)
@@ -1474,7 +1482,7 @@ class VQLManagerWindow(QMainWindow):
                 except (OSError, IOError) as error:
                     self.statusBar.showMessage("Save Error")
                     self.error_message_box("Error", "An error occurred during creation of the folders in : "
-                                           + sub_folder, str(error))
+                                           + sub_folder, str(error), parent=self)
                     return False
 
             if not await self.write_file(part_log_filepath, part_log_content):

@@ -27,6 +27,8 @@ import qdarkstyle
 app = None
 
 
+
+
 def main():
     """Main entry point for the application
 
@@ -37,7 +39,7 @@ def main():
     global app
 
     if version_info < (3, 6):
-        print('You need at least Python version 3.6 to run this application.')
+        VQLManagerWindow.message_to_user('You need at least Python version 3.6 to run this application.')
         return
 
     app = QApplication(argv)

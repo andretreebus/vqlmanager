@@ -20,6 +20,7 @@ from typing import Iterator, List, Tuple, Union, Sized, Tuple, Generator
 # other libs
 from PyQt5.QtCore import Qt, QObject, Q_FLAGS
 from PyQt5.QtGui import QBrush, QColor
+from vqlmanager.vqlmanagerwindow import VQLManagerWindow
 from vqlmanager.diff_match_patch import diff_match_patch
 
 # registry data
@@ -36,13 +37,15 @@ if not log_dir.is_dir():
     try:
         log_dir.mkdir()
     except (OSError, IOError) as e:
-        print("Could not create log directory: " + str(log_filename.parent))
+        VQLManagerWindow.error_message_box("Log file error", "Could not create log directory: "
+                                           + str(log_filename.parent), str(e))
 
 if not log_filename.is_file():
     try:
         log_filename.touch()
     except (OSError, IOError) as e:
-        print("Could not create logfile: " + str(log_filename))
+        VQLManagerWindow.error_message_box("Log file error", "Could not create logfile: "
+                                           + str(log_filename), str(e))
 
 logging.basicConfig(filename=log_filename, level=LOGGING_LEVEL, format=LOGGING_FORMAT, filemode="w")
 logger = logging.getLogger("vql_manager")
