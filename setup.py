@@ -30,13 +30,15 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Topic :: Version Control :: Denodo',
         'Topic :: Office/Business',
-        'Topic :: Software Development :: VQL Management',
-    ],
-    install_requires=['PyQt5>=5.9.2', 'qdarkstyle>=2.3.1', 'pip>=9.0.1', 'setuptools>=28.8.0', 'sip>=4.19.6', 'wheel>=0.30.0'],
+        'Topic :: Software Development :: VQL Management'],
+    install_requires=[
+        'pip>=9.0.1',
+        'setuptools>=28.8.0',
+        'wheel>=0.30.0',
+        'PyQt5>=5.9.2',
+        'sip>=4.19.6',
+        'qdarkstyle>=2.3.1'],
     entry_points={'gui_scripts': ['vqlmanager=vqlmanager.__main__:main', ], },
     include_package_data=False,
     zip_safe=True
 )
-
-# bash -cl "/venv/bin/python /setup.py bdist_wininst
-# python3.6 setup.py bdist_wheel
