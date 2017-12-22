@@ -38,8 +38,7 @@ setup(
         'PyQt5>=5.9.2',
         'sip>=4.19.6',
         'qdarkstyle>=2.3.1'
-        'sqlparse>=0.2.4'
-        'diff_match_patch_python'],
+        'sqlparse>=0.2.4'],
     entry_points={'gui_scripts': ['vqlmanager=vqlmanager.__main__:main', ], },
     include_package_data=False,
     zip_safe=True

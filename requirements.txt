@@ -1,4 +1,3 @@
 PyQt5
 qdarkstyle
 sqlparse
-diff_match_patch_python
