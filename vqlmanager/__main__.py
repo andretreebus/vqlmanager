@@ -3,7 +3,26 @@
 """
 Denodo VQL Manager
 This program shows GUI to split, select, combine and compare Denodo .vql files
-Dependencies: PyQt5, qdarkstyle, sqlparse (diff_match_patch in this distribution)
+Dependencies: python3.6 PyQt5, qdarkstyle, sqlparse, diff_match_patch
+
+Installation
+    Install python3.6 or later from https://www.python.org/
+    Make sure its in your path.
+
+    To test it run in console or command: python -V  or python3 -V or python3.6 -V
+    Use the python command reporting version 3.6
+    in this example i assume it is python3
+
+    on linux
+    sudo python3.6 -m pip install wheel setuptools PyQt5 qdarkstyle sqlparse diff_match_patch
+
+    on windows: open cmd in admin mode
+    python3.6 -m pip install wheel setuptools PyQt5 qdarkstyle sqlparse diff_match_patch
+
+    anaconda: open jupyter add the said libs
+    Note: diff_match_patch may be called diff_match_patch_python
+
+
 
 Author: Andre Treebus
 Email: andretreebus@hotmail.com
@@ -40,9 +59,9 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QTreeView, QPush
 from PyQt5.QtWidgets import QMenu, QLabel, QAbstractItemView, QSplitter, QVBoxLayout, QHeaderView
 from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QFileDialog, QMessageBox, QPlainTextEdit
+from diff_match_patch import *
 import qdarkstyle
 import sqlparse
-from vqlmanager.diff_match_patch import *
 
 
 app = None
