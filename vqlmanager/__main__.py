@@ -3,7 +3,7 @@
 """
 Denodo VQL Manager
 This program shows GUI to split, select, combine and compare Denodo .vql files
-Dependencies: PyQt5, qdarkstyle, (diff_match_patch in this distribution)
+Dependencies: PyQt5, qdarkstyle, sqlparse (diff_match_patch in this distribution)
 
 Author: Andre Treebus
 Email: andretreebus@hotmail.com
@@ -26,24 +26,22 @@ __author__ = 'andretreebus@hotmail.com (Andre Treebus)'
 
 # standard library
 from sys import exit, argv, version_info
-from copy import deepcopy, copy
 from pathlib import Path
-from typing import Iterator, List, Tuple, Union, Sized, Tuple, Generator
+from typing import Iterator, List, Union, Sized, Tuple, Iterable
 from functools import partial
-import subprocess
 import logging
-import asyncio
-
 
 # other libs
-from PyQt5.QtCore import Qt, QObject, QSize, QRect, QFileInfo, QTimer, QVariant, QSettings, QPoint
-from PyQt5.QtGui import QIcon, QBrush, QColor
-from PyQt5.QtWidgets import qApp, QApplication, QMainWindow, QWidget, QTreeWidget, QTreeWidgetItem
-from PyQt5.QtWidgets import QTreeWidgetItemIterator, QMenu, QLabel, QAbstractItemView
-from PyQt5.QtWidgets import QGridLayout, QSizePolicy, QHBoxLayout, QRadioButton, QButtonGroup
-from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QMenuBar, QFileDialog, QMessageBox, QScrollArea
-from anytree import *
+from PyQt5.QtCore import Qt, QObject, QSize, QRect, QFileInfo, QVariant, QSettings
+from PyQt5.QtCore import QModelIndex, QSortFilterProxyModel, QAbstractItemModel
+from PyQt5.QtCore import QStateMachine, QSignalTransition, QState, pyqtSignal
+from PyQt5.QtGui import QIcon, QBrush, QColor, QFont, QPixmap, QTextOption
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QTreeView, QPushButton, QLineEdit
+from PyQt5.QtWidgets import QMenu, QLabel, QAbstractItemView, QSplitter, QVBoxLayout, QHeaderView
+from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QRadioButton, QButtonGroup
+from PyQt5.QtWidgets import QTextEdit, QStatusBar, QAction, QFileDialog, QMessageBox, QPlainTextEdit
 import qdarkstyle
+import sqlparse
 from vqlmanager.diff_match_patch import *
 
 
@@ -52,24 +50,6 @@ app = None
 # registry data
 COMPANY = "www.erasmusmc.nl"
 APPLICATION_NAME = "VQL Manager"
-
-
-def message_to_user(message: str, parent=None):
-    """General Messagebox functionality.
-    :param message: The message to show to the user
-    :type message: str
-    :param parent: The owner widget of this message box
-    :return: None
-    :rtype: None
-    """
-    logger.debug('Message to user: ' + message)
-    msg = QMessageBox(parent)
-    msg.setWindowTitle("You got a message!")
-    msg.setIcon(QMessageBox.Question)
-    msg.setText("<strong>" + message + "<strong>")
-    msg.setStandardButtons(QMessageBox.Ok)
-    msg.setDefaultButton(QMessageBox.Ok)
-    msg.exec()
 
 
 def error_message_box(title: str, text: str, error: str, parent=None):
@@ -86,7 +66,7 @@ def error_message_box(title: str, text: str, error: str, parent=None):
     :return: None
     :rtype: None
     """
-    logger.error(title + str(error))
+
     msg = QMessageBox(parent)
     msg.setWindowTitle(title)
     msg.setIcon(QMessageBox.Critical)
@@ -104,24 +84,111 @@ LOGGING_FORMAT = "%(levelname)s %(asctime)s - %(message)s "
 script_path = Path(__file__).parent.resolve()
 log_filename = script_path / "log" / "vql_manager.log"
 log_dir = log_filename.parent
+
 if not log_dir.is_dir():
     try:
         log_dir.mkdir()
     except (OSError, IOError) as e:
-        error_message_box("Log file error", "Could not create log directory: " + str(log_filename.parent), str(e))
+        _msg = f"Could not create log directory: {str(log_filename.parent)}"
+        error_message_box("Log file error", _msg, str(e))
 
 if not log_filename.is_file():
     try:
         log_filename.touch()
     except (OSError, IOError) as e:
-        error_message_box("Log file error", "Could not create logfile: " + str(log_filename), str(e))
+        _msg = f"Could not create logfile: {str(log_filename)}"
+        error_message_box("Log file error", _msg, str(e))
+
 
 logging.basicConfig(filename=log_filename, level=LOGGING_LEVEL, format=LOGGING_FORMAT, filemode="w")
-logger = logging.getLogger("vql_manager")
 
-# class VqlConstants(QObject):
+
+class LogWrapper(QObject, logging.Logger):
+    """Wrapper class for logging.logger"""
+
+    custom_signal = pyqtSignal(str)
+
+    def __init__(self, name):
+        super(LogWrapper, self).__init__(name=name)
+
+    def error(self, msg, *args, **kwargs):
+        """
+
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+        self.custom_signal.emit('ERROR: ' + msg)
+        super(LogWrapper, self).error(msg)
+
+    def info(self, msg, *args, **kwargs):
+        """
+
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        self.custom_signal.emit('INFO: ' + msg)
+        super(LogWrapper, self).info(msg)
+
+    def debug(self, msg, *args, **kwargs):
+        """
+
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+        self.custom_signal.emit('DEBUG: ' + msg)
+        super(LogWrapper, self).debug(msg)
+
+    def critical(self, msg, *args, **kwargs):
+        """
+
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+        self.custom_signal.emit('FATAL: ' + msg)
+        super(LogWrapper, self).critical(msg)
+
+    def warning(self, msg, *args, **kwargs):
+        """
+
+        :param msg:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+        self.custom_signal.emit('WARNING: ' + msg)
+        super(LogWrapper, self).critical(msg)
+
+
+def message_to_user(message: str, parent=None):
+    """
+
+    :param message:
+    :param parent:
+    :return:
+    """
+
+    msg = QMessageBox(parent)
+    msg.setWindowTitle("You got a message!")
+    msg.setIcon(QMessageBox.Question)
+    msg.setText("<strong>" + message + "<strong>")
+    msg.setStandardButtons(QMessageBox.Ok)
+    msg.setDefaultButton(QMessageBox.Ok)
+    msg.exec()
+
+
 # convenience names for class constants
-# checkbox option in the tree widgets
 PART_STATE = Qt.PartiallyChecked
 CHECKED = Qt.Checked
 UNCHECKED = Qt.Unchecked
@@ -136,14 +203,6 @@ red = "#ff4444"
 green = "#44ff44"
 yellow = "#ffff44"
 white = "#cccccc"
-
-
-# item flags for the all_chapters and selection tree widget items
-ITEM_FLAG_ALL = Qt.ItemIsEnabled
-ITEM_FLAG_CHAPTER = Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsTristate
-ITEM_FLAG_CODE_ITEM = Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
-ITEM_FLAG_SEL = Qt.ItemIsSelectable | Qt.ItemIsEnabled
-
 
 LOG_FILE_NAME = "part.log"
 
@@ -180,6 +239,8 @@ class ModelState(QObject):
     COMP_REPO = 1 << 7        # indicate that the base model is a repository (folder structure)
     BASE_LOADED = 1 << 8      # indicate that the base model is loaded
     COMP_LOADED = 1 << 9      # indicate that the compare model is loaded
+    BASE_UNLOAD = 1 << 10     # indicate that the base model must unload
+    COMP_UNLOAD = 1 << 11     # indicate that the compare model is unload
 
 
 class SourceType(QObject):
@@ -194,17 +255,40 @@ class ViewType(QObject):
     """
     Global constants for the gui modes
     """
-    VQL_VIEW = 1 << 12
+    SCRIPT_VIEW = 1 << 12
     DENODO_VIEW = 1 << 13
+    DEPEND_VIEW = 1 << 14
 
 
 class CodeView(QObject):
     """
     Global constants for the gui modes
     """
-    ORIGINAL_CODE = 1 << 14
-    COMPARE_CODE = 1 << 15
-    DIFF_CODE = 1 << 16
+    ORIGINAL_CODE = 1 << 15
+    COMPARE_CODE = 1 << 16
+    DIFF_CODE = 1 << 17
+
+
+class Pane(QObject):
+    """
+    Global constants for the pane modes
+    """
+    LEFT = 1 << 18
+    RIGHT = 1 << 19
+
+
+class ItemProperties(QObject):
+    """
+    Role identifiers
+    """
+    DISPLAY = Qt.DisplayRole
+    EDIT = Qt.EditRole
+    COLOR = Qt.ForegroundRole
+    DATA = Qt.UserRole + 1
+    TYPE = Qt.UserRole + 2
+    CHECK = Qt.CheckStateRole
+    TIP = Qt.ToolTipRole
+    ICON = Qt.DecorationRole
 
 
 GUI_NONE = GuiType.GUI_NONE
@@ -217,16 +301,67 @@ COMP_FILE = ModelState.COMP_FILE
 COMP_REPO = ModelState.COMP_REPO
 BASE_LOADED = ModelState.BASE_LOADED
 COMP_LOADED = ModelState.COMP_LOADED
+BASE_UNLOAD = ModelState.BASE_UNLOAD
+COMP_UNLOAD = ModelState.COMP_UNLOAD
+
 
 FILE = SourceType.FILE
 REPO = SourceType.REPO
 
-VQL_VIEW = ViewType.VQL_VIEW
+SCRIPT_VIEW = ViewType.SCRIPT_VIEW
 DENODO_VIEW = ViewType.DENODO_VIEW
+DEPEND_VIEW = ViewType.DEPEND_VIEW
 
 ORIGINAL_CODE = CodeView.ORIGINAL_CODE
 COMPARE_CODE = CodeView.COMPARE_CODE
 DIFF_CODE = CodeView.DIFF_CODE
+
+LEFT = Pane.LEFT
+RIGHT = Pane.RIGHT
+
+DISPLAY = ItemProperties.DISPLAY
+EDIT = ItemProperties.EDIT
+COLOR = ItemProperties.COLOR
+DATA = ItemProperties.DATA
+TYPE = ItemProperties.TYPE
+CHECK = ItemProperties.CHECK
+TIP = ItemProperties.TIP
+ICON = ItemProperties.ICON
+
+ROLES = [DISPLAY, EDIT, COLOR, DATA, TYPE, CHECK, TIP, ICON]
+
+FONT = QFont()
+FONT.setPointSize(8)
+
+NOTHING = QVariant()
+
+RECENT_FILES = "recent_file_list"
+RECENT_REPOSITORIES = "recent_repositories_list"
+MAX_RECENT_FILES = 8
+
+
+def show_role(role: int)->str:
+    """
+    Debug function
+    :param role:
+    :return:
+    """
+    result = 'NOTHING'
+    if role == DISPLAY:
+        result = 'DISPLAY'
+    elif role == EDIT:
+        result = 'EDIT'
+    elif role == COLOR:
+        result = 'COLOR'
+    elif role == DATA:
+        result = 'DATA'
+    elif role == TYPE:
+        result = 'TYPE'
+    elif role == CHECK:
+        result = 'CHECK'
+    elif role == TIP:
+        result = 'TIP'
+    return result
 
 
 def show_color(item_color: QBrush)->str:
@@ -235,6 +370,7 @@ def show_color(item_color: QBrush)->str:
     :param item_color:
     :return:
     """
+    color = 'None'
     if item_color:
         if item_color == red:
             color = 'red'
@@ -244,8 +380,6 @@ def show_color(item_color: QBrush)->str:
             color = 'yellow'
         elif item_color == white:
             color = 'white'
-    else:
-        color = 'None'
     return color
 
 
@@ -258,24 +392,23 @@ def show_mode(mode: int)->str:
     :rtype: str
     """
     gui_types = {GUI_NONE: "GUI_NONE", GUI_SELECT: "GUI_SELECT", GUI_COMPARE: "GUI_COMPARE"}
+
     model_states = {BASE_FILE: "BASE_FILE", BASE_REPO: "BASE_REPO", COMP_FILE: "COMP_FILE", COMP_REPO: "COMP_REPO",
-                    BASE_LOADED: "BASE_LOADED", COMP_LOADED: "COMP_LOADED"}
+                    BASE_LOADED: "BASE_LOADED", COMP_LOADED: "COMP_LOADED",
+                    BASE_UNLOAD: "BASE_UNLOAD", COMP_UNLOAD: "COMP_UNLOAD"}
+
     source_types = {FILE: "FILE", REPO: "REPO"}
 
     mode_txt = list()
-
     for num, name in gui_types.items():
         if mode & num:
             mode_txt.append(name)
-
     for num, name in model_states.items():
         if mode & num:
             mode_txt.append(name)
-
     for num, name in source_types.items():
         if mode & num:
             mode_txt.append(name)
-
     return " : ".join(mode_txt)
 
 
@@ -283,28 +416,26 @@ def get_reserved_words()->Iterator[Sized]:
     """Returns a list (Iterator) over the Denodo reserved words.
 
     :return: the list as Iterator
-    :rtype: Iterator[Sized]
     """
-    words = ["ADD", "AS", "ANY", "OPT", "OR", "CREATE", "VIEW", "NULL", "ALTER", "NOT", "FROM", "AND", "SELECT",
-             "WHEN", "JOIN", "IS", "ON", "LEFT", "CASE", "TABLE", "WHERE", "DEFAULT", "OFF", "JDBC", "INNER", "OF",
-             "ZERO", "NOS", "UNION", "DF", "DISTINCT", "ASC", "FULL", "FALSE", "DESC", "BASE", "DATABASE", "TRUE",
-             "ALL", "CONTEXT", "CONNECT", "LDAP", "WITH", "SWAP", "ARN", "BOTH", "CALL", "CROSS", "CURRENT_DATE",
-             "CURRENT_TIMESTAMP", "CUSTOM", "DROP", "EXISTS", "FETCH", "FLATTEN", "GRANT", "GROUP BY", "GS", "HASH",
-             "HAVING", "HTML", "IF", "INTERSECT", "INTO", "LEADING", "LIMIT", "MERGE", "MINUS", "MY", "NATURAL",
-             "NESTED", "OBL", "ODBC", "OFFSET", "ONE", "ORDER BY", "ORDERED", "PRIVILEGES", "READ", "REVERSEORDER",
-             "REVOKE", "RIGHT", "ROW", "TO", "TRACE", "TRAILING", "USER", "USING", "WRITE", "WS"]
-
+    words = '''ADD,AS,ANY,OPT,OR,CREATE,VIEW,NULL,ALTER,NOT,FROM,AND,SELECT,WHEN,JOIN,IS,ON,LEFT,CASE,TABLE,
+    WHERE,DEFAULT,OFF,JDBC,INNER,OF,ZERO,NOS,UNION,DF,DISTINCT,ASC,FULL,FALSE,DESC,BASE,DATABASE,TRUE,ALL,
+    CONTEXT,CONNECT,LDAP,WITH,SWAP,ARN,BOTH,CALL,CROSS,CURRENT_DATE,CURRENT_TIMESTAMP,CUSTOM,DROP,EXISTS,
+    FETCH,FLATTEN,GRANT,GROUP BY,GS,HASH,HAVING,HTML,IF,INTERSECT,INTO,LEADING,LIMIT,MERGE,MINUS,MY,NATURAL,
+    NESTED,OBL,ODBC,OFFSET,ONE,ORDER BY,ORDERED,PRIVILEGES,READ,REVERSEORDER,REVOKE,RIGHT,
+    ROW,TO,TRACE,TRAILING,USER,USING,WRITE,WS'''
+    words = words.replace('\n', '')
+    words = words.split(',')
     words.append(DELIMITER)
-    words.extend(CHAPTER_NAMES)
-    reserved_words = reversed(sorted(words, key=len))
+    words.extend([name[:-1] for name in CHAPTER_NAMES if not name == 'DATABASE'])
+    words.append('DATABASE')
+    # noinspection PyTypeChecker
+    reserved_words = list(reversed(sorted(words, key=len)))
     return reserved_words
 
 
-RECENT_FILES = "recent_file_list"
-RECENT_REPOSITORIES = "recent_repositories_list"
-MAX_RECENT_FILES = 8
-
-# <link rel="stylesheet" type="text/css" href="mystyle.css">
+HIGHLIGHTED_WORDS = get_reserved_words()
+SUBSTITUTIONS = list([(word, '<span><rword style="color:#b220e8;">' + str(word) + '</rword></span>')
+                      for word in HIGHLIGHTED_WORDS])
 
 
 def doc_template(object_name: str, body: str)->str:
@@ -340,131 +471,914 @@ diff_engine.Match_Threshold = 0.0
 diff_engine.Patch_DeleteThreshold = 0.0
 diff_engine.Match_MaxBits = 0
 
-class ItemData():
-    def __init__(self):
+
+def load_model_from_file(file: Path, new_mode: int, root_item, bar: QStatusBar, icons: dict, logger):
+    """Loads a single .vql file into the VqlModel instance.
+
+    :param file: path of the file to bew loaded in
+    :type file: Path
+    :param new_mode: either BASE_FILE or COMP_FILE
+    :type new_mode: int
+    :param root_item: RootItem
+    :param bar:
+    :param icons:
+    :param logger:
+    :return: None
+    :rtype: None
+    """
+    content = read_file(file, logger)
+    if content:
+        root_item.parse(content, new_mode, bar, icons, logger)
+
+
+def load_model_from_repository(folder: Path, new_mode: int, root_item, bar: QStatusBar, icons: dict, logger):
+    """Loads a repository folder structure into the VqlModel instance.
+
+    :param folder: the folder containing the repository
+    :type folder: Path
+    :param new_mode: flag indication BASE_REPO or COMP_REPO
+    :param root_item: the root
+    :param bar:
+    :param icons:
+    :param logger:
+    :return: None
+    :rtype: None
+    """
+
+    existing_folders = {sub_folder for sub_folder in folder.iterdir()}
+    possible_folders = {folder / sub_folder for sub_folder in CHAPTER_NAMES}
+    matching_folders = existing_folders & possible_folders
+    if not matching_folders:
+        # noinspection PyArgumentList
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        message = "No repository found. Did not find any matching sub folders."
+        message_to_user(message)
+        return
+
+    msg = 'Make sure your repository is not corrupt.'
+    part_files = [folder / sub_folder / LOG_FILE_NAME
+                  for sub_folder in CHAPTER_NAMES if folder / sub_folder in matching_folders]
+    non_existing_part_files = [str(part_file) for part_file in part_files if not part_file.is_file()]
+    existing_part_files = [part_file for part_file in part_files if part_file.is_file()]
+    if non_existing_part_files:
+        missing = ', '.join(non_existing_part_files)
+        message_to_user(f"{LOG_FILE_NAME} file(s): {missing} not found. {msg}")
+
+    all_code_files = list()
+
+    for part_file in existing_part_files:
+        file_content = read_file(part_file, logger)
+        code_files = [Path(code_file) for code_file in file_content.split('\n')]
+        non_existing_code_files = [str(code_file) for code_file in code_files if not code_file.is_file()]
+        if non_existing_code_files:
+            missing = ', '.join(non_existing_code_files)
+            message_to_user(f"Code file(s): {missing} not found. {msg}")
+        existing_code_files = [(str(code_file.parent.name), code_file)
+                               for code_file in code_files if code_file.is_file()]
+        all_code_files.extend(existing_code_files)
+
+    content = PROP_QUOTE
+    for chapter in root_item.chapters:
+        content += chapter.header
+        files = [file for chapter_name, file in all_code_files if chapter_name == chapter.name]
+        for file in files:
+            content += read_file(file, logger)
+
+    if content:
+        if content:
+            root_item.parse(content, new_mode, bar, icons, logger)
+    else:
+        error_message_box('Load Failed', 'No content found', '')
+        return
+
+
+def read_file(file: Path, logger) -> str:
+    """General function to read in a file
+
+    :param file:
+    :param logger:
+    :return:
+    """
+
+    logger.debug('Reading: ' + str(file))
+    content = None
+    try:
+        with file.open() as f:
+            content = f.read()
+    except (OSError, IOError) as error:
+        msg = "An error occurred during reading of file: "
+        error_message_box("Error", msg + str(file), str(error))
+    if content:
+        logger.debug(f"{str(file)} with {len(content)} characters read.")
+    return content
+
+
+class TransOpenBase(QSignalTransition):
+    """Transition class from init to base_loaded"""
+    
+    def __init__(self, _app: QMainWindow, source_state: QState, target_state: QState, signal):
+        super(TransOpenBase, self).__init__(signal, source_state)
+        self.app = _app
+        self.setTargetState(target_state)
+
+    def eventTest(self, event: QStateMachine.SignalEvent):
         """
-        Dict constuctor with list of keys for indexing
-        :param args:
+        Selector for the events
+        :param event:
+        :return:
+        """
+        if type(event) != QStateMachine.SignalEvent:
+            return False
+        mode = event.arguments()[0]
+
+        if not mode & BASE_LOADED:
+            if mode & (BASE_FILE | BASE_REPO):
+                if self.app.base_repository_file or self.app.base_repository_folder:
+                    return True
+            return False
+        else:
+            return False
+
+    def onTransition(self, event: QStateMachine.SignalEvent):
+        """
+
+        :param event:
+        :return:
+        """
+        mode = event.arguments()[0]
+        s = self.app
+        s.setWindowTitle(APPLICATION_NAME + ' Base Mode')
+        s.diff_buttons.setHidden(True)
+        s.select_buttons.setHidden(True)
+        s.compare_repository_label.setText('')
+        # noinspection PyArgumentList
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        s.treeview1.blockSignals(True)
+        s.tree_model.beginResetModel()
+        if mode & BASE_FILE:
+            s.logger.debug(f"Loading model from file in {show_mode(mode)} mode")
+            # noinspection PyUnresolvedReferences
+            s.status_bar.showMessage("Loading model from file.")
+            file = s.base_repository_file
+            s.base_repository_label.setText('File : ' + str(file))
+            load_model_from_file(file, BASE_FILE | GUI_SELECT, s.root_item, s.status_bar, s.icons, s.logger)
+            s.working_folder = file.resolve().parent
+            s.add_to_recent_files(file, FILE)
+
+        elif mode & BASE_REPO:
+            s.logger.debug(f"Loading model from repository in {show_mode(mode)} mode")
+            # noinspection PyUnresolvedReferences
+            s.status_bar.showMessage("Loading model from repository")
+            repo = s.base_repository_folder
+            s.base_repository_label.setText('Repository : ' + str(repo))
+            load_model_from_repository(repo, BASE_REPO | GUI_SELECT, s.root_item, s.status_bar, s.icons, s.logger)
+            s.working_folder = repo
+            s.add_to_recent_files(repo, REPO)
+
+        if mode & SCRIPT_VIEW:
+            s.denodo_folder_structure_action.setChecked(False)
+            s.on_switch_view()
+
+        s.tree_model.endResetModel()
+        s.treeview1.blockSignals(False)
+        s.dependency_model.gui = GUI_SELECT
+        s.logger.debug(f"Loading model from file finished.")
+
+        # noinspection PyArgumentList
+        QApplication.restoreOverrideCursor()
+
+        s.export_file_action.setEnabled(True)
+        s.export_folder_action.setEnabled(True)
+        s.open_compare_file_action.setEnabled(True)
+        s.open_compare_folder_action.setEnabled(True)
+        s.denodo_folder_structure_action.setEnabled(True)
+        s.compare_recent_repository_menu.setEnabled(True)
+        s.compare_recent_file_menu.setEnabled(True)
+        s.add_mode(BASE_LOADED)
+        # noinspection PyUnresolvedReferences
+        s.status_bar.showMessage("Ready")
+        s.logger.debug("Finished setting mode: " + show_mode(s.get_mode()))
+
+
+class TransResetBase(QSignalTransition):
+    """Transition class from base_loaded to init"""
+
+    def __init__(self, _app: QMainWindow, source_state: QState, target_state: QState, signal):
+        super(TransResetBase, self).__init__(signal, source_state)
+        self.app = _app
+        self.setTargetState(target_state)
+
+    def eventTest(self, event: QStateMachine.SignalEvent):
+        """
+        Selector for the events
+        :param event:
+        :return:
+        """
+        if type(event) != QStateMachine.SignalEvent:
+            return False
+        mode = event.arguments()[0]
+        if mode & BASE_UNLOAD:
+            if mode & BASE_LOADED:
+                if mode & (BASE_FILE | BASE_REPO):
+                    if self.app.base_repository_file or self.app.base_repository_folder:
+                        return True
+            return False
+        else:
+            return False
+
+    def onTransition(self, event):
+        """
+
+        :param event:
+        :return:
+        """
+        mode = event.arguments()[0]
+        old_mode = int(mode)
+        s = self.app
+        s.setWindowTitle(APPLICATION_NAME)
+        # noinspection PyArgumentList
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        s.treeview1.blockSignals(True)
+
+        s.tree_model.reset()
+
+        s.base_repository_file = ''
+        s.base_repository_folder = ''
+        s.compare_repository_file = ''
+        s.compare_repository_folder = ''
+
+        s.base_repository_label.setText('No File opened')
+
+        s.export_file_action.setEnabled(False)
+        s.export_folder_action.setEnabled(False)
+        s.open_compare_file_action.setEnabled(False)
+        s.open_compare_folder_action.setEnabled(False)
+        s.denodo_folder_structure_action.setEnabled(False)
+        s.compare_recent_repository_menu.setEnabled(False)
+        s.compare_recent_file_menu.setEnabled(False)
+        # noinspection PyUnresolvedReferences
+        s.status_bar.showMessage("All Reset")
+
+        removals = (BASE_UNLOAD, BASE_LOADED, BASE_REPO, BASE_FILE)
+
+        for removal in removals:
+            if old_mode & removal:
+                old_mode -= removal
+        s.set_mode(old_mode)
+
+        # noinspection PyArgumentList
+        QApplication.restoreOverrideCursor()
+        s.logger.debug("Finished removing base, mode : " + show_mode(s.get_mode()))
+
+
+class TransOpenCompare(QSignalTransition):
+    """Transition class from base_loaded to compare_loaded"""
+    
+    def __init__(self, _app: QMainWindow, source_state: QState, target_state: QState, signal):
+        super(TransOpenCompare, self).__init__(signal, source_state)
+        self.app = _app
+        self.setTargetState(target_state)
+
+    def eventTest(self, event: QStateMachine.SignalEvent):
+        """
+        Selector for the events
+        :param event:
+        :return:
+        """
+        if type(event) != QStateMachine.SignalEvent:
+            return False
+        mode = event.arguments()[0]
+
+        if mode & BASE_LOADED:
+            if self.app.compare_repository_file or self.app.compare_repository_folder:
+                return True
+            return False
+        else:
+            return False
+
+    def onTransition(self, event: QStateMachine.SignalEvent):
+        """
+
+        :param event:
+        :return:
+        """
+        mode = event.arguments()[0]
+        s = self.app
+        s.setWindowTitle(APPLICATION_NAME + ' Compare Mode')
+        s.diff_buttons.setHidden(False)
+        s.select_buttons.setHidden(False)
+        # noinspection PyArgumentList
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        s.treeview1.blockSignals(True)
+        s.tree_model.beginResetModel()
+        s.on_click_item_selected(None)
+
+        if mode & COMP_FILE:
+            s.logger.debug(f"Loading model from file in {show_mode(mode)} mode")
+            # noinspection PyUnresolvedReferences
+            s.status_bar.showMessage("Loading model from file.")
+            file = s.compare_repository_file
+            s.compare_repository_label.setText('File : ' + str(file))
+            load_model_from_file(file, COMP_FILE | GUI_SELECT, s.root_item, s.status_bar, s.icons, s.logger)
+            s.working_folder = file.resolve().parent
+            s.add_to_recent_files(file, FILE)
+        elif mode & COMP_REPO:
+            s.logger.debug(f"Loading model from repository in {show_mode(mode)} mode")
+            # noinspection PyUnresolvedReferences
+            s.status_bar.showMessage("Loading model from repository")
+            repo = s.compare_repository_folder
+            s.compare_repository_label.setText('Repository : ' + str(repo))
+            load_model_from_repository(repo, COMP_REPO | GUI_SELECT, s.root_item, s.status_bar, s.icons, s.logger)
+            s.working_folder = repo
+            s.add_to_recent_files(repo, REPO)
+
+        if mode & SCRIPT_VIEW:
+            s.denodo_folder_structure_action.setChecked(False)
+            s.on_switch_view()
+
+        s.tree_model.endResetModel()
+        s.dependency_model.gui = GUI_COMPARE
+        s.treeview1.blockSignals(False)
+        s.reset_compare_action.setEnabled(True)
+        s.logger.debug(f"Loading model from file finished.")
+        # noinspection PyUnresolvedReferences
+        s.status_bar.showMessage("Ready")
+        # noinspection PyArgumentList
+        QApplication.restoreOverrideCursor()
+
+        s.add_mode(COMP_LOADED)
+        s.sub_mode(GUI_SELECT)
+        s.add_mode(GUI_COMPARE)
+        s.logger.debug("Finished setting mode: " + show_mode(s.get_mode()))
+
+
+class TransRemoveCompare(QSignalTransition):
+    """Transition class from compare_loaded to base_loaded"""
+    def __init__(self, _app: QMainWindow, source_state: QState, target_state: QState, signal):
+        super(TransRemoveCompare, self).__init__(signal, source_state)
+        self.app = _app
+        self.setTargetState(target_state)
+
+    def eventTest(self, event: QStateMachine.SignalEvent):
+        """
+        Selector for the events
+        :param event:
+        :return:
+        """
+        if type(event) != QStateMachine.SignalEvent:
+            return False
+        mode = event.arguments()[0]
+
+        if mode & COMP_UNLOAD:
+            if mode & COMP_LOADED:
+                if mode & BASE_LOADED:
+                    if mode & (COMP_FILE | COMP_REPO):
+                        if self.app.compare_repository_file or self.app.compare_repository_folder:
+                            return True
+            return False
+        else:
+            return False
+
+    def onTransition(self, event):
+        """
+
+        :param event:
+        :return:
+        """
+        mode = event.arguments()[0]
+        old_mode = int(mode)
+        s = self.app
+        # noinspection PyArgumentList
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        s.setWindowTitle(APPLICATION_NAME + ' Base Mode')
+        s.diff_buttons.setHidden(True)
+        s.select_buttons.setHidden(True)
+        s.reset_compare_action.setEnabled(False)
+        s.on_click_item_selected(None)
+
+        s.treeview1.blockSignals(True)
+        s.tree_model.remove_compare()
+        s.dependency_model.gui = GUI_SELECT
+        s.compare_repository_file = ''
+        s.compare_repository_folder = ''
+        s.compare_repository_label.setText('')
+        removals = (COMP_UNLOAD, COMP_LOADED, COMP_FILE, COMP_REPO, GUI_COMPARE)
+
+        for removal in removals:
+            if old_mode & removal:
+                old_mode -= removal
+        s.set_mode(old_mode)
+        s.add_mode(GUI_SELECT)
+
+        s.treeview1.blockSignals(False)
+        # noinspection PyArgumentList
+        QApplication.restoreOverrideCursor()
+        s.logger.debug("Finished removal of compare, mode: " + show_mode(s.get_mode()))
+
+
+class TransResetAll(QSignalTransition):
+    """Transition class from compare_loaded to init"""
+    def __init__(self, _app: QMainWindow, source_state: QState, target_state: QState, signal):
+        super(TransResetAll, self).__init__(signal, source_state)
+        self.app = _app
+        self.setTargetState(target_state)
+
+    def eventTest(self, event: QStateMachine.SignalEvent):
+        """
+        Selector for the events
+        :param event:
+        :return:
+        """
+        if type(event) != QStateMachine.SignalEvent:
+            return False
+        mode = event.arguments()[0]
+
+        if mode & BASE_LOADED:
+            if mode & COMP_LOADED:
+                if mode & COMP_UNLOAD:
+                    if mode & BASE_UNLOAD:
+                        if mode & (COMP_FILE | COMP_REPO):
+                            if mode & (BASE_REPO | BASE_FILE):
+                                if self.app.base_repository_file or self.app.base_repository_folder:
+                                    if self.app.compare_repository_file or self.app.compare_repository_folder:
+                                        return True
+            return False
+        else:
+            return False
+
+    def onTransition(self, event):
+        """
+
+        :param event:
+        :return:
+        """
+        mode = event.arguments()[0]
+        old_mode = int(mode)
+        s = self.app
+        s.setWindowTitle(APPLICATION_NAME)
+        s.diff_buttons.setHidden(True)
+        s.select_buttons.setHidden(True)
+        # noinspection PyArgumentList
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        s.treeview1.blockSignals(True)
+
+        s.treemodel.reset()
+
+        s.base_repository_file = ''
+        s.base_repository_folder = ''
+        s.compare_repository_file = ''
+        s.compare_repository_folder = ''
+
+        s.base_repository_label.setText('No File opened ')
+        s.compare_repository_label.setText('')
+        # noinspection PyUnresolvedReferences
+        s.status_bar.showMessage("All Reset")
+
+        removals = (COMP_UNLOAD, BASE_UNLOAD, COMP_LOADED, BASE_LOADED, COMP_FILE, COMP_REPO, BASE_REPO, BASE_FILE)
+
+        for removal in removals:
+            if old_mode & removal:
+                old_mode -= removal
+        s.set_mode(old_mode)
+
+        s.export_file_action.setEnabled(False)
+        s.export_folder_action.setEnabled(False)
+        s.open_compare_file_action.setEnabled(False)
+        s.open_compare_folder_action.setEnabled(False)
+        s.denodo_folder_structure_action.setEnabled(False)
+        s.compare_recent_repository_menu.setEnabled(False)
+        s.compare_recent_file_menu.setEnabled(False)
+
+        s.treeview1.blockSignals(False)
+        s.dependency_model.gui = GUI_SELECT
+        # noinspection PyArgumentList
+        QApplication.restoreOverrideCursor()
+        s.logger.debug("Finished resetting to init, mode: " + show_mode(s.get_mode()))
+
+
+class TreeItem(object):
+    """
+    Base class for items in tree_model used in tree_views
+    """
+    BRANCH = 1
+    LEAF = 2
+
+    def __init__(self, class_type, parent=None, index: int=None):
+        self.parent_item = parent
+        self.class_type = class_type
+        if parent:
+            if index is None:
+                self.parent_item.child_items.append(self)
+            else:
+                self.parent_item.child_items.insert(index, self)
+
+        self.child_items = list()
+        self.column_data = list()
+        self.name = ''
+        self.color = white
+        self.selected = True
+        self.tristate = False
+        self.tooltip = ''
+        self.node_type = TreeItem.BRANCH
+        self.icon = QVariant()
+
+    def changed(self):
+        """
+
+        :return:
+        """
+
+        if self.node_type == TreeItem.LEAF:
+            return not self.selected
+        else:
+            if self.selected:
+                if self.has_children():
+                    if any([child.changed() for child in self.child_items]):
+                        return True
+                    else:
+                        return False
+            else:
+                if self.has_children():
+                    return True
+                else:
+                    return False
+
+    def set_parent(self, parent):
+        """
+
+        :param parent:
+        :return:
+        """
+        assert isinstance(parent, (TreeItem, type(None)))
+        self.parent_item = parent
+        if parent:
+            self.parent_item.child_items.append(self)
+
+    def take_children(self)->list:
+        """
+
+        :return:
+        """
+        temp = self.child_items
+        self.child_items = list()
+        return temp
+
+    def add_children(self, new_children: list):
+        """
+
+        :param new_children:
+        :return:
+        """
+        for child in new_children:
+            assert isinstance(child, TreeItem)
+            child.set_parent(self)
+            self.child_items.append(child)
+
+    def get_role_data(self, role, column: int):
+        """
+
+        :param role:
+        :param column:
+        :return:
+        """
+        if role in [DISPLAY, EDIT]:
+            if column == 0:
+                return self.name
+            else:
+                return self.column_data[column]
+        elif role == COLOR:
+            return QBrush(QColor(self.color))
+        elif role == CHECK:
+            if column == 0:
+                if self.tristate:
+                    return PART_STATE
+                else:
+                    if self.selected:
+                        return CHECKED
+                    else:
+                        return UNCHECKED
+        elif role == TIP:
+            return self.tooltip
+        elif role == ICON:
+            return self.icon
+        else:
+            return NOTHING
+
+    def set_role_data(self, role, column, value):
+        """
+
+        :param role:
+        :param column:
+        :param value:
+        :return:
+        """
+        if role in [DISPLAY, EDIT]:
+            if column == 0:
+                self.column_data[column] = value
+                self.name = value
+        elif role == COLOR:
+            self.color = str(value.color)
+        elif role == CHECK:
+            self.set_selected(False if value == UNCHECKED else True)
+        elif role == TIP:
+            self.tooltip = value
+        else:
+            return False
+        return True
+
+    def ancestors(self, tree_item):
+        """
+
+        :return:
+        """
+        if isinstance(tree_item, TreeItem) and not isinstance(tree_item, RootItem):
+            parent_item = tree_item.parent_item
+            yield parent_item
+            yield from self.ancestors(parent_item)
+
+    def descendants(self, tree_item):
+        """
+
+        :param tree_item:
+        :return:
+        """
+        if isinstance(tree_item, TreeItem):
+            for child in tree_item.child_items:
+                yield child
+                yield from self.descendants(child)
+
+    def set_selected(self, select: bool):
+        """
+
+        :param select:
+        :return:
+        """
+        self.selected = select
+        self.tristate = False
+        # if selected was chosen (True or False ) switch all children also
+        for child in self.descendants(self):
+            child.selected = select
+
+        for parent in self.ancestors(self):
+            child_select_list = list(map(lambda x: x.selected, self.descendants(parent)))
+            if child_select_list:
+                any_child_selected = any(child_select_list)
+                all_children_selected = all(child_select_list)
+                selected = True if any_child_selected else False
+                parent.tristate = True if selected and not all_children_selected else False
+                if not any_child_selected:
+                    parent.selected = False
+                    parent.tristate = False
+                if all_children_selected:
+                    parent.selected = True
+                    parent.tristate = False
+                if parent.tristate:
+                    parent.selected = True
+
+    def invalidate(self):
+        """
+        reset item
+        :return:
+        """
+        self.child_items = list()
+        self.selected = True
+        self.tristate = False
+
+    def has_children(self):
+        """
+
+        :return:
+        """
+        return True if len(self.child_items) else False
+
+    def child(self, row: int):
+        """
+
+        :param row:
+        :return:
+        """
+        return self.child_items[row]
+
+    def child_count(self)->int:
+        """
+        returns the count
+        :return:
+        """
+        return len(self.child_items)
+
+    def child_number(self)->int:
+        """
+        Returns the number this child has under the parent
+
+        :return:
+        """
+        if self.parent_item and self.parent_item.has_children():
+            return self.parent_item.child_items.index(self)
+        else:
+            return 0
+
+    @staticmethod
+    def get_child_index_by_name(child_items, name: str):
+        """
+
+        :param child_items:
+        :param name:
+        :return:
+        """
+        for i, child in enumerate(child_items):
+            if child.name == name:
+                return i
+        return -1
+
+    def column_count(self)->int:
+        """
+
+        :return:
+        """
+        if self.column_data:
+            return len(self.column_data)
+        else:
+            return 0
+
+    def set_column_data(self, column: int, value)->bool:
+        """
+
+        :param column:
+        :param value:
+        :return:
+        """
+        if 0 <= column < len(self.column_data):
+            self.column_data[column] = value
+            return True
+        return False
+
+    def insert_children(self, position: int, items: list)->bool:
+        """
+
+        :param position:
+        :param items:
+        :return:
+        """
+        if 0 <= position < len(self.child_items):
+            for i, item in enumerate(items):
+                self.child_items.insert(position + i, item)
+            return True
+        return False
+
+    def insert_columns(self, position: int, columns: list)->bool:
+        """
+
+        :param position:
+        :param columns:
+        :return:
+        """
+        success = [False]
+        if 0 <= position < len(self.column_data):
+            success = [self.set_column_data(position + i, column) for i, column in enumerate(columns)]
+            success.extend([child.insert_columns(position, columns) for child in self.child_items])
+        if all(success):
+            return True
+        else:
+            return False
+
+    def remove_child(self, child):
+        """
+
+        :param child:
+        :return:
+        """
+        self.child_items.remove(child)
+
+    def remove_children(self, position: int, count: int)->bool:
+        """
+
+        :param position:
+        :param count:
+        :return:
+        """
+        if 0 <= position + count < len(self.child_items):
+            for row in range(count):
+                self.child_items.pop(position)
+            return True
+        return False
+
+    def remove_columns(self, position: int, columns: int)->bool:
+        """
+
+        :param position:
+        :param columns:
+        :return:
+        """
+        success = [False]
+        if 0 <= position + columns < self.column_count():
+            success = [True]
+            for column in range(columns):
+                self.column_data.pop(position)
+                success.extend([child.remove_columns(position, columns) for child in self.child_items])
+        if all(success):
+            return True
+        else:
+            return False
+
+    def clear(self):
+        """
+        rolls up the tree from the leaves
+        :return:
+        """
+        if self.child_items:
+            for item in self.child_items:
+                item.clear()
+        else:
+            if self.parent_item:
+                if self in self.parent_item.child_items:
+                    self.parent_item.child_items.remove(self)
+
+
+class ItemData:
+    """
+    Code item mode dependent data
+    """
+
+    def __init__(self, root_item):
+        """
+        Dict constructor with list of keys for indexing
         """
 
         self.denodo_path = Path()
-        self.script_path = Path()
         self.depend_path = Path()
+        self.code = ''
         self.dependencies = list()
         self.dependees = list()
-        self.code = ''
-        self.denodo_node = None
-        self.script_node = None
-        self.depend_node = None
+        self.dependee_parent = None
+        self.dependees_tree = root_item
 
-class CodeItem():
+
+class CodeItem(TreeItem):
     """CodeItem class represents a .vql file with a single Denodo object.
 
     It inherits from QTreeWidgetItem, so it can display in a QTreeWidget.
     Basically a bag for pieces of Denodo code.
     """
-    def __init__(self, chapter_name: str, mode: int, code=None, compare_code=None):
-        """CodeItem Class constructor.
+    headers = []
 
-        :param parent: The object owning this object
-        :type parent: Chapter
-        :param chapter_name: the chapter name
-        :type chapter_name: str
-        :param mode: the mode flag
-        :type mode: int
-        :param code: optional: the code related to this denodo object
-        ::type code: str
-        :param code: optional: the other code related to this denodo object for comparisons
-        ::type code: str
+    def __init__(self, parent: TreeItem, name: str, index: int=None):
         """
-        self.user_data = dict()
-        # self.setCheckState(0, CHECKED)
-        self.childIndicatorPolicy = 2
-        # self.setFlags(ITEM_FLAG_CODE_ITEM)  # from parent
+
+        :param parent:
+        :param name:
+        :param index:
+        """
+        super(CodeItem, self).__init__(CodeItem, parent=parent, index=index)
         self.class_type = CodeItem
-        self.chapter_name = chapter_name
-        self.mode = mode
-        self.object_name = ''
-        self.data = ItemData()
-        self.compare_data = ItemData()
+        if isinstance(parent, Chapter):
+            self.chapter = self.parent_item
+        self.node_type = TreeItem.LEAF
+        self.name = name
+        self.column_data = [self.name]
+        self.tooltip = self.object_type() + ': ' + self.name if self.chapter else 'Code Item' + ': ' + self.name
+        self.script_path = '/' + self.chapter.name + '/' + self.name
+        self.base_data = ItemData(self)
+        self.compare_data = ItemData(self)
 
-        self.selected = True
-        self.color = white
-        self.set_color(white)
-        self.gui = GUI_SELECT
+    def object_type(self):
+        """
 
-        data=self.get_context_data(self.gui)
-        data.code = code
-        self.object_name = self.extract_object_name_from_code(self.chapter_name, data.code)
-        data.denodo_path = self.extract_denodo_folder_name_from_code(self.chapter_name, data.code)
-        data.script_path = '/' + chapter_name + '/' + self.object_name
+        :return:
+        """
+        object_type = self.chapter.name[:-1] if self.chapter.name != 'DATABASE' else 'DATABASE'
+        return object_type.capitalize()
 
-        self.mode |= mode
-        if compare_code:
-            self.compare(self.gui)
+    def get_child_index_by_name(self, name: str):
+        """
 
-        # if self.object_name:
-        #     pass
-            # self.setText(0, self.object_name)
+        :param name:
+        :return:
+        """
+        return super().get_child_index_by_name(self.child_items, self.name)
 
-        # if mode & (COMP_FILE | COMP_REPO):
-        #     self.compare()
-        logger.debug(f">>>> CodeItem: {self.object_name if self.object_name else '_'} created.")
+    def clear(self):
+        """
 
-    def get_context_data(self, gui):
+        :return:
+        """
+        self.base_data = None
+        self.compare_data = None
+        self.column_data = None
+        super().clear()
+
+    def get_context_data(self, gui: int):
         """
 
         :param gui:
         :return:
         """
         if gui & GUI_SELECT:
-            data = self.data
+            data = self.base_data
         elif gui & GUI_COMPARE:
             data = self.compare_data
         else:
-            data= None
+            data = None
         return data
-
-    def set_compare_code(self, compare_code: str, mode: int):
-        """Setter for the compare mode and code.
-
-        :param compare_code: the other code
-        :type compare_code: str
-        :param mode: new mode
-        :type mode: int
-        :return: None
-        :rtype: None
-        """
-        self.mode |= mode
-        self.compare_data.code = compare_code
-        self.compare_data.denodo_path = self.extract_denodo_folder_name_from_code(self.chapter_name, compare_code)
-        self.compare(mode)
-
-    def compare(self, gui):
-        """Compare the code and sets color to the item itself.
-
-        White = unchanged; Red = lost; Green = new; Yellow = changed
-        :return: None
-        :rtype: None
-        """
-        if self.data.code:
-            if self.compare_data.code:
-                if self.compare_data.code == self.data.code:
-                    self.set_color(white)
-                else:
-                    self.set_color(yellow)
-            else:
-                if self.mode & GUI_COMPARE:
-                    self.set_color(red)
-                else:
-                    data = self.get_context_data(gui)
-                    self.set_color(red) if data.dependees else self.set_color(white)
-        else:
-            if self.compare_data.code:
-                self.set_color(green)
-            # else:
-                # code item with identity crisis
-                # self.suicide()
 
     @staticmethod
     def get_diff(code: str, compare_code: str)->str:
@@ -543,115 +1457,6 @@ class CodeItem():
 
         return diff_html
 
-    # def pack(self, color_filter: str):
-    #     """Packs and filters this code item object.
-    #
-    #     Used before it gets cloned.
-    #     The clone function only supports QTreeWidgetItem data,
-    #     so we survive in the standard data(Qt.UserRole) in a dictionary.
-    #
-    #     :param color_filter: The color that is selected
-    #     :type color_filter: str
-    #     :return: None
-    #     :rtype: None
-    #     """
-    #     # if color_filter:
-    #     #     if not self.color == color_filter:
-    #     #         self.setHidden(True)
-    #     #     else:
-    #     #         self.setHidden(False)
-    #     # else:
-    #     #     self.setHidden(False)
-    #
-    #     self.user_data['chapter_name'] = self.chapter_name
-    #     self.user_data['object_name'] = self.object_name
-    #     self.user_data['code'] = self.code
-    #     self.user_data['compare_code'] = self.compare_code
-    #     self.user_data['color'] = self.color
-    #     self.user_data['denodo_folder'] = self.denodo_path
-    #     self.user_data['compare_denodo_folder'] = self.compare_denodo_path
-    #     self.user_data['gui'] = self.gui
-    #     self.user_data['class_type'] = self.class_type
-    #     self.user_data['selected'] = self.is_selected()
-    #     # self.user_data['hidden'] = self.isHidden()
-    #     self.user_data['dependencies'] = self.dependencies
-    #     self.user_data['dependees'] = self.dependees
-    #     self.user_data['compare_dependencies'] = self.compare_dependencies
-    #     self.user_data['compare_dependees'] = self.compare_dependees
-    #
-    #     # self.setData(0, Qt.UserRole, self.user_data)
-    #
-    # @staticmethod
-    # def unpack(item):
-    #     """Unpacks and filters this code item.
-    #
-    #     Used after it has been cloned and packed.
-    #     The clone function only supports QTreeWidgetItem data,
-    #     so we survive in the standard data member data.(Qt.UserRole)
-    #     in a dictionary. This is a static member to unpack
-    #     the resulting QTreeWidgetItem after cloning.
-    #
-    #     :param item: item to be unpacked
-    #     :type item:
-    #     :return: None
-    #     :rtype: None
-    #     """
-    #
-    #     item.user_data = item.data(0, Qt.UserRole)
-    #     item.chapter_name = item.user_data['chapter_name']
-    #     item.object_name = item.user_data['object_name']
-    #     item.code = item.user_data['code']
-    #     item.compare_code = item.user_data['compare_code']
-    #     item.color = item.user_data['color']
-    #     item.denodo_path = item.user_data['denodo_folder']
-    #     item.compare_denodo_path = item.user_data['compare_denodo_folder']
-    #     item.gui = item.user_data['gui']
-    #     item.class_type = item.user_data['class_type']
-    #     item.is_selected = item.user_data['selected']
-    #     item.dependencies = item.user_data['dependencies']
-    #     item.dependees = item.user_data['dependees']
-    #     item.compare_dependencies = item.user_data['compare_dependencies']
-    #     item.compare_dependees = item.user_data['compare_dependees']
-    #     item.setData(0, Qt.ForegroundRole, QBrush(QColor(item.color)))
-    #     item.setHidden(item.user_data['hidden'])
-
-    def set_gui(self, gui: int):
-        """Sets the gui type flag.
-
-        This function also resets the compare mode if it was there.
-
-        :param gui: mode flag
-        :type gui: int
-        :return: None
-        :rtype: None
-        """
-
-        self.gui = gui
-        if gui == GUI_SELECT:
-            if self.mode & COMP_REPO:
-                self.mode -= COMP_REPO
-            if self.mode & COMP_FILE:
-                self.mode -= COMP_FILE
-            if self.mode & GUI_COMPARE:
-                self.mode -= GUI_COMPARE
-            # self.set_gui(GUI_SELECT)
-            self.compare_data = ItemData()
-            self.set_color_based_on_dependencies()
-
-    def set_color_based_on_dependencies(self):
-        """
-
-        :return:
-        """
-        if self.gui & GUI_SELECT:
-            dependees = self.data.dependees
-        elif self.gui & GUI_COMPARE:
-            dependees = self.compare_data.dependees
-        else:
-            return
-        self.set_color(white) if dependees else self.set_color(red)
-
-
     def get_file_path(self, folder: Path)->Path:
         """Get the file path for this code item.
 
@@ -664,45 +1469,31 @@ class CodeItem():
         :return: Path
         """
 
-        file_name = folder / (self.object_name.replace('/', '_').replace('\\', '_') + '.vql')
+        file_name = folder / (self.name.replace('/', '_').replace('\\', '_') + '.vql')
         return file_name
-
-    def is_selected(self)->bool:
-        """Is the object selected.
-
-        :return: Boolean
-        :rtype: bool
-        """
-        return self.selected
-        # if self.checkState(0) == CHECKED:
-        #     return True
-        # else:
-        #     return False
-
-    def set_color(self, color: str):
-        """Set the color.
-
-        :param color: The color as htmlcode
-        :type color: str
-        :return: None
-        :rtype: None
-        """
-
-        self.color = color
-        # self.setForeground(0, QBrush(QColor(color)))
 
     def remove_compare(self):
         """Function reverts the loading of compare code.
 
-        :return: None
-        :rtype: None
+        :return: removal
+        :rtype: Union[CodeItem, None]
         """
-
-        if self.compare_code:
-            if not self.code:
-                self.suicide()
-        if self.code:
-            self.set_gui(GUI_SELECT)
+        if self.compare_data.code:
+            self.compare_data = ItemData(self)
+            if self.base_data.code:
+                self.selected = True
+                self.color = red if self.base_data.dependees else white
+            else:
+                if isinstance(self.parent_item, TreeItem):
+                    return self
+        else:
+            if self.base_data.code:
+                self.selected = True
+                self.color = red if self.base_data.dependees else white
+            else:
+                if isinstance(self.parent_item, TreeItem):
+                    return self
+        return None
 
     @staticmethod
     def extract_denodo_folder_name_from_code(chapter_name: str, code: str)->Union[Path, None]:
@@ -810,7 +1601,7 @@ class CodeItem():
         return object_name
 
 
-class Chapter():
+class Chapter(TreeItem):
     """Chapter class represents a group of Denodo objects of the same kind.
 
     For example: a BASEVIEW or a ASSOCIATION etc.
@@ -819,7 +1610,7 @@ class Chapter():
     It inherits from QTreeWidgetItem, so it can display in a QTreeWidget.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, parent: TreeItem=None):
         """Initializer of the class objects
 
         :param parent: reference to the parent or owner, this should be a VqlModel class (QTreeWidget)
@@ -828,103 +1619,32 @@ class Chapter():
         :type name: str
         """
 
-        # super(Chapter, self).__init__(parent)
-        # self.user_data = dict()
-        # self.setCheckState(0, CHECKED)
-        # self.childIndicatorPolicy = 2
-        # self.setFlags(ITEM_FLAG_CHAPTER)
+        super(Chapter, self).__init__(Chapter, parent=parent)
+
         self.class_type = Chapter
         self.name = name
-        self.selected = True
-        # self.setText(0, name)
+        self.column_data = [self.name]
+        self.tooltip = self.name
         self.header = self.make_header(name)
-        self.code_items = list()
-        self.color = ''
-        self.set_color(white)
+        self.code_items = self.child_items
         self.gui = GUI_SELECT
-        logger.debug(f">> Chapter: {self.name} created.")
 
-    # General functions
+    def get_child_index_by_name(self, name: str):
+        """
 
-    # def pack(self, color_filter: str):
-    #     """Packs and filters this chapter object and its code_item children.
-    #
-    #     Used before it gets cloned.
-    #     The clone function only supports QTreeWidgetItem data,
-    #     so we survive in the standard data(Qt.UserRole) in a dictionary.
-    #
-    #     :param color_filter: The color that is selected
-    #     :type color_filter: str
-    #     :return: None
-    #     :rtype: None
-    #     """
-    #
-    #     self.user_data['name'] = self.name
-    #     self.user_data['header'] = self.header
-    #     self.user_data['code_items'] = self.code_items
-    #     self.user_data['chapter_items'] = self.chapter_items
-    #     self.user_data['parent_chapter_name'] = self.parent_chapter_name
-    #     self.user_data['color'] = self.color
-    #     self.user_data['gui'] = self.gui
-    #     self.user_data['class_type'] = self.class_type
-    #     self.user_data['selected'] = self.is_selected()
-    #     self.user_data['expanded'] = self.isExpanded()
-    #     for code_item in self.code_items:
-    #         code_item.chapter_name = self.name
-    #         code_item.pack(color_filter)
-    #     for chapter in self.chapter_items:
-    #         chapter.parent_chapter_name = self.name
-    #         chapter.pack(color_filter)
-    #     self.set_color_based_on_children(self.gui)
-    #     self.setData(0, Qt.UserRole, self.user_data)
-    #
-    # @staticmethod
-    # def unpack(item: QTreeWidgetItem):
-    #     """Unpacks and filters this chapter object and its code_item children.
-    #
-    #     Used after it has been cloned and packed,
-    #     The clone function only supports QTreeWidgetItem data,
-    #     so we survive in the standard data member data.(Qt.UserRole)
-    #     in a dictionary
-    #     This is a static member to unpack the resulting QTreeWidgetItem after cloning
-    #
-    #     :param item: item to be unpacked
-    #     :type item: QTreeWidgetItem
-    #     :return: None
-    #     :rtype: None
-    #     """
-    #
-    #     item.user_data = item.data(0, Qt.UserRole)
-    #     item.name = item.user_data['name']
-    #     item.header = item.user_data['header']
-    #     item.code_items = item.user_data['code_items']
-    #     item.color = item.user_data['color']
-    #     item.chapter_items = item.user_data['chapter_items']
-    #     item.gui = item.user_data['gui']
-    #     item.class_type = item.user_data['class_type']
-    #     item.is_selected = item.user_data['selected']
-    #     item.setExpanded(item.user_data['expanded'])
-    #     deletes = list()
-    #     for i in range(item.childCount()):
-    #         child = item.child(i)
-    #         if child.checkState(0) == UNCHECKED:
-    #             deletes.append(child)
-    #     for child in reversed(deletes):
-    #         item.takeChild(item.indexOfChild(child))
-    #
-    #     deletes = list()
-    #     for i in range(item.childCount()):
-    #         child = item.child(i)
-    #         item_class = child.data(0, Qt.UserRole)['class_type']
-    #         if child.childCount() == 0 and not item_class == CodeItem:
-    #             deletes.append(child)
-    #     for child in reversed(deletes):
-    #         item.takeChild(item.indexOfChild(child))
-    #
-    #     for i in range(item.childCount()):
-    #         child = item.child(i)
-    #         item_class = child.data(0, Qt.UserRole)['class_type']
-    #         item_class.unpack(child)
+        :param name:
+        :return:
+        """
+        return super().get_child_index_by_name(self.child_items, name)
+
+    def clear(self):
+        """
+
+        :return:
+        """
+        self.code_items = None
+        self.column_data = None
+        super().clear()
 
     @staticmethod
     def make_header(chapter_name: str)->str:
@@ -951,96 +1671,46 @@ class Chapter():
         for code_item in self.code_items:
             code_item.set_gui(gui)
 
-    def set_color_based_on_children(self, mode: int, color=''):
-        """Sets the color of chapters based on the non hidden children.
-
-        :param mode: the mode of the gui
-        :type mode: int
-        :param color: Optional parameter to set the color only
-        :type color: str
-        :return: None
-        :rtype: None
+    def set_color_based_on_children(self):
         """
-        if color:
-            self.set_color(color)
-            return
 
-        colors = [code_item.color for code_item in self.code_items if not code_item.isHidden()]
-        # colors.extend([chapter_item.color for chapter_item in self.chapter_items if not chapter_item.isHidden()])
-
-        unique_colors = list(set(colors))
-        length = len(unique_colors)
-        if length == 0:
-            if mode & GUI_SELECT:
-                self.set_color(white)
-            else:
-                self.set_color(red)
-        elif length == 1:
-            self.set_color(unique_colors[0])
-        else:
-            self.set_color(yellow)
-
-    def set_color(self, color: str):
-        """Set the color of this item.
-
-        :param color:
-        :type color: str
         :return:
         """
-        self.color = color
-        # self.setForeground(0, QBrush(QColor(color)))
-
-    # def get_code_item_by_object_name(self, object_name: str)->Tuple[int, Union[CodeItem, None]]:
-    #     """Returns a tuple of a code item child and the index it has.
-    #
-    #     :param object_name: The object name of the CodeItem
-    #     :type object_name: str
-    #     :return: The tuple of index and code item object itself
-    #     :rtype: tuple(int, CodeItem)
-    #     """
-    #     if object_name:
-    #         for index, code_item in enumerate(self.code_items):
-    #             if code_item:
-    #                 if code_item.object_name == object_name:
-    #                     return index, code_item
-    #     return 0, None
-
-    def is_selected(self)->bool:
-        """Function returns if the chapter is selected or has some code items selected (tri state).
-
-        :return: Boolean
-        :rtype: bool
-        """
-        return self.selected and len(self.code_items) > 0
-        # if self.checkState(0) in (PART_STATE, CHECKED) and len(self.code_items) > 0:
-        #     return True
-        # else:
-        #     return False
+        unique_colors = list(set([code_item.color for code_item in self.code_items]))
+        length = len(unique_colors)
+        if length == 0:
+                self.color = red
+                self.set_selected(False)
+        elif length == 1:
+            self.color = unique_colors[0]
+        else:
+            self.color = yellow
 
     # export functions
     # to file
-    def get_code_as_file(self, mode: int, selected: bool)->str:
+    def get_code_as_file(self, mode: int, selected_only: bool)->str:
         """Returns the combined Denodo code for a whole chapter.
 
         This function adds a chapter header, and only selected code items
         :param mode: either GUI_SELECT or GUI_COMPARE ; what code to return
         :type mode: int
-        :param selected: Indicator is True if only selected items are requested
-        :type selected: bool
+        :param selected_only: Indicator is True if only selected items are requested
+        :type selected_only: bool
         :return: string with code content
         :rtype: str
         """
         code = []
-        if selected and self.is_selected():
-            if mode & GUI_SELECT:
-                code = [code_item.code for code_item in self.code_items if code_item.is_selected()]
-            elif mode & GUI_COMPARE:
-                code = [code_item.compare_code for code_item in self.code_items if code_item.is_selected()]
+        if selected_only:
+            if self.selected or any([code_item.selected for code_item in self.code_items]):
+                if mode & GUI_SELECT:
+                    code = [code_item.base_data.code for code_item in self.code_items if code_item.selected]
+                elif mode & GUI_COMPARE:
+                    code = [code_item.compare_data.code for code_item in self.code_items if code_item.selected]
         else:
             if mode & GUI_SELECT:
-                code = [code_item.code for code_item in self.code_items]
+                code = [code_item.base_data.code for code_item in self.code_items]
             elif mode & GUI_COMPARE:
-                code = [code_item.compare_code for code_item in self.code_items]
+                code = [code_item.compare_data.code for code_item in self.code_items]
         return self.header + '\n'.join(code)
 
     # to repository
@@ -1058,758 +1728,127 @@ class Chapter():
         """
         folder = base_path / self.name
         part_log_filepath = folder / LOG_FILE_NAME
-        part_log = [str(code_item.get_file_path(folder)) for code_item in self.code_items if code_item.is_selected()]
+        part_log = [str(code_item.get_file_path(folder)) for code_item in self.code_items if code_item.selected]
         part_log_content = '\n'.join(part_log)
         return part_log_filepath, part_log_content
 
+    @staticmethod
+    def get_chapter_by_name(chapters: Iterable, chapter_name: str):
+        """Function that returns a chapter from the 'chapters' list by its name.
 
-
-class CodeItems(dict):
-    """
-    General storage for CodeItems
-    """
-    def __init__(self, *args):
-        """
-        Dict constuctor with list of keys for indexing
-        :param args:
-        """
-        dict.__init__(self, args)
-        self.item_keys = list()
-
-    def append_code_item(self, code_item):
-        """
-        Adds listlike behavior
-        :param code_item:
+        :param chapters:
+        :param chapter_name:
         :return:
         """
-        assert code_item.class_type == CodeItem
-        object_name = code_item.object_name
-        if object_name:
-            if object_name not in self.item_keys:
-                self.item_keys.append(object_name)
-            self[code_item.object_name] = code_item
+        chapter = None
+        for chapter in chapters:
+            if chapter.name == chapter_name:
+                break
+        return chapter
+
+
+class DenodoFolder(TreeItem):
+    """
+    Class representing a denodo folder
+    """
+
+    def __init__(self, parent: TreeItem, name: str):
+
+        super(DenodoFolder, self).__init__(DenodoFolder, parent=parent)
+
+        self.class_type = DenodoFolder
+        self.name = name
+        self.column_data = [self.name]
+        self.tooltip = self.name
+        self.sub_folders = self.child_items
+        self.gui = GUI_SELECT
 
     def clear(self):
         """
-        Overloaded clear
+
         :return:
         """
-        self.item_keys = list()
-        self.clear()
+        self.sub_folders = None
+        self.column_data = None
+        super().clear()
 
-    def __setitem__(self, key, value):
+
+class RootItem(TreeItem):
+    """Class representing a root of a tree"""
+
+    def __init__(self, header: str):
+        super(RootItem, self).__init__(RootItem)
+        self.class_type = RootItem
+        self.chapters = self.child_items
+        self.storage_list = list()
+        self.add_chapters(CHAPTER_NAMES)
+        self.header = header
+        self.column_data = [header]
+        self.name = 'root'
+        self.view = SCRIPT_VIEW
+        self.icon = QVariant()
+
+    def get_child_index_by_name(self, name: str):
         """
-        overloaded __set_item__
-        :param key:
-        :param value:
+
+        :param name:
         :return:
         """
-        if key not in self.item_keys:
-            self.item_keys.append(key)
-        self.__setitem__(key,value)
+        return super().get_child_index_by_name(self.child_items, self.name)
 
-    def popitem(self):
+    def clear(self):
         """
-        prevent popitem
+
         :return:
         """
-        pass
+        self.chapters = None
+        self.column_data = None
+        super().clear()
 
-    def selected_items(self)->List[CodeItem]:
-        """Function for looping over selected code items.
-
-        :return: list with items
-        :rtype: list(CodeItem)
+    def change_view(self, mode: int)->bool:
+        """Method that swaps the tree items from VQL View to Denodo file structure view and back.
+        The actual switch is done in switch_view function.
+        This function handles the surrounding aspects.
+        :param mode: the mode flag with bits for the new view either VQL_VIEW or DENODO_VIEW
+        :type mode: int
+        :return: Success or not
+        :rtype: bool
         """
-        items = [code_item for code_item in self.values() if code_item.is_selected()]
-        return items
+        gui = mode & (GUI_NONE | GUI_SELECT | GUI_COMPARE)
+        if self.view & mode:
+            return True
 
-    def get_chapter_items(self, chapter_name):
-        items = (code_item for code_item in self.values() if code_item.chapter_name == chapter_name)
-        return items
-
-    def get_index(self, item_key):
-        """
-        Return the index
-        :param item_key:
-        :return:
-        """
-
-        if item_key in self.item_keys:
-            index = self.item_keys.index(item_key)
-        else:
-            index = -1
-
-        return index
-
-    def insert_under(self, index, _item):
-        """
-
-        :param index:
-        :param _item:
-        :return:
-        """
-        temp = self.copy()
-        self.clear()
-        length = len(temp)
-        inserted = False
-        if 0 <= index < length:
-            for i, item in enumerate(temp):
-                self.append_code_item(item)
-                if i == index and not inserted:
-                    self.append_code_item(item)
-                    inserted = True
-        return inserted
-
-
-class AbstractIter(Iterator):
-
-    def __init__(self, node, filter_=None, stop=None, max_level=None):
-        """
-        Base class for all iterators.
-        Iterate over tree starting at `node`.
-        Keyword Args:
-            filter_: function called with every `node` as argument, `node` is returned if `True`.
-            stop: stop iteration at `node` if `stop` function returns `True` for `node`.
-            maxlevel (int): maximum decending in the node hierarchy.
-        """
-        self.node = node
-        self.filter_ = filter_
-        self.stop = stop
-        self.max_level = max_level
-        self.__iter = None
-
-    def __init(self):
-        node = self.node
-        max_level = self.max_level
-        filter_ = self.filter_ or AbstractIter.__default_filter
-        stop = self.stop or AbstractIter.__default_stop
-        children = [] if AbstractIter._abort_at_level(1, max_level) else AbstractIter._get_children([node], stop)
-        return self._iter(children, filter_, stop, max_level)
-
-    @staticmethod
-    def __default_filter(node):
-        return True
-
-    @staticmethod
-    def __default_stop(node):
+        if mode & SCRIPT_VIEW:
+            if self.storage_list:
+                self.switch_view()
+                self.view = SCRIPT_VIEW
+                return True
+            else:
+                pass
+        elif mode & DENODO_VIEW:
+            if self.storage_list:
+                self.switch_view()
+                self.view = DENODO_VIEW
+                return True
+            else:
+                # build denodo view
+                if self.build_denodo_view(gui):
+                    if self.storage_list:
+                        self.switch_view()
+                        self.view = DENODO_VIEW
+                        return True
         return False
 
-    def __iter__(self):
-        return self.__init()
-
-    def __next__(self):
-        if self.__iter is None:
-            self.__iter = self.__init()
-        return next(self.__iter)
-
-    @staticmethod
-    def _iter(children, filter_, stop, max_level):
-        raise NotImplementedError()
-
-    @staticmethod
-    def _abort_at_level(level, max_level):
-        return max_level is not None and level > max_level
-
-    @staticmethod
-    def _get_children(children, stop):
-        return [child for child in children if not stop(child)]
-
-
-class PreOrderIter(AbstractIter):
-
-    """
-    Iterate over tree applying pre-order strategy starting at `node`.
-
-    Start at root and go-down until reaching a leaf node.
-    Step upwards then, and search for the next leafs.
-
-    >>> from anytree import Node, RenderTree, AsciiStyle, PreOrderIter
-    >>> f = Node("f")
-    >>> b = Node("b", parent=f)
-    >>> a = Node("a", parent=b)
-    >>> d = Node("d", parent=b)
-    >>> c = Node("c", parent=d)
-    >>> e = Node("e", parent=d)
-    >>> g = Node("g", parent=f)
-    >>> i = Node("i", parent=g)
-    >>> h = Node("h", parent=i)
-    >>> print(RenderTree(f, style=AsciiStyle()).by_attr())
-    f
-    |-- b
-    |   |-- a
-    |   +-- d
-    |       |-- c
-    |       +-- e
-    +-- g
-        +-- i
-            +-- h
-    >>> [node.name for node in PreOrderIter(f)]
-    ['f', 'b', 'a', 'd', 'c', 'e', 'g', 'i', 'h']
-    >>> [node.name for node in PreOrderIter(f, maxlevel=3)]
-    ['f', 'b', 'a', 'd', 'g', 'i']
-    >>> [node.name for node in PreOrderIter(f, filter_=lambda n: n.name not in ('e', 'g'))]
-    ['f', 'b', 'a', 'd', 'c', 'i', 'h']
-    >>> [node.name for node in PreOrderIter(f, stop=lambda n: n.name == 'd')]
-    ['f', 'b', 'a', 'g', 'i', 'h']
-    """
-
-    @staticmethod
-    def _iter(children, filter_, stop, max_level):
-        stack = [children]
-        while stack:
-            children = stack[-1]
-            if children:
-                child = children.pop(0)
-                if filter_(child):
-                    yield child
-                if not AbstractIter._abort_at_level(len(stack) + 1, max_level):
-                    grandchildren = AbstractIter._get_children(child.children, stop)
-                    if grandchildren:
-                        stack.append(grandchildren)
-            else:
-                stack.pop()
-
-
-class NodeMixin(object):
-    u"""
-    The :any:`NodeMixin` class extends any Python class to a tree node.
-
-    The only tree relevant information is the `parent` attribute.
-    If `None` the :any:`NodeMixin` is root node.
-    If set to another node, the :any:`NodeMixin` becomes the child of it.
-
-    >>> from anytree import NodeMixin, RenderTree
-    >>> class MyBaseClass(object):
-    ...     foo = 4
-    >>> class MyClass(MyBaseClass, NodeMixin):  # Add Node feature
-    ...     def __init__(self, name, length, width, parent=None):
-    ...         super(MyClass, self).__init__()
-    ...         self.name = name
-    ...         self.length = length
-    ...         self.width = width
-    ...         self.parent = parent
-
-    >>> my0 = MyClass('my0', 0, 0)
-    >>> my1 = MyClass('my1', 1, 0, parent=my0)
-    >>> my2 = MyClass('my2', 0, 2, parent=my0)
-
-    >>> for pre, _, node in RenderTree(my0):
-    ...     treestr = u"%s%s" % (pre, node.name)
-    ...     print(treestr.ljust(8), node.length, node.width)
-    my0      0 0
-    ├── my1  1 0
-    └── my2  0 2
-    """
-    separator = "/"
-
-    @property
-    def parent(self):
-        u"""
-        Parent Node.
-
-        On set, the node is detached from any previous parent node and attached
-        to the new node.
-
-        >>> from anytree import Node, RenderTree
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc")
-        >>> lian = Node("Lian", parent=marc)
-        >>> print(RenderTree(udo))
-        Node('/Udo')
-        >>> print(RenderTree(marc))
-        Node('/Marc')
-        └── Node('/Marc/Lian')
-
-        **Attach**
-
-        >>> marc.parent = udo
-        >>> print(RenderTree(udo))
-        Node('/Udo')
-        └── Node('/Udo/Marc')
-            └── Node('/Udo/Marc/Lian')
-
-        **Detach**
-
-        To make a node to a root node, just set this attribute to `None`.
-
-        >>> marc.is_root
-        False
-        >>> marc.parent = None
-        >>> marc.is_root
-        True
+    def switch_view(self):
+        """Method to switch view between VQL or Denodo file structure.
+        Store the children of the root item of the tree widget
+        and replace them with the stored ones.
+        :return: None
+        :rtype: None
         """
-        try:
-            return self.__parent
-        except AttributeError:
-            return None
+        self.storage_list, self.child_items = self.child_items, self.storage_list
 
-    @parent.setter
-    def parent(self, value):
-        if value is not None and not isinstance(value, NodeMixin):
-            msg = f"Parent node {value} is not of type 'NodeMixin'."
-            message_to_user(msg)
-        try:
-            parent = self.__parent
-        except AttributeError:
-            parent = None
-        if parent is not value:
-            self.__check_loop(value)
-            self.__detach(parent)
-            self.__attach(value)
-
-    def __check_loop(self, node):
-        if node is not None:
-            if node is self:
-                msg = f"Cannot set parent. {self} cannot be parent of itself."
-                message_to_user(msg)
-                # raise LoopError(msg % self)
-            if self in node.path:
-                msg = f"Cannot set parent. {self} is parent of {node}."
-                message_to_user(msg)
-                # raise LoopError(msg % (self, node))
-
-    def __detach(self, parent):
-        if parent is not None:
-            self._pre_detach(parent)
-            parent_children = parent.__children_
-            assert self in parent_children, "Tree internal data is corrupt."
-            # ATOMIC START
-            parent_children.remove(self)
-            self.__parent = None
-            # ATOMIC END
-            self._post_detach(parent)
-
-    def __attach(self, parent):
-        if parent is not None:
-            self._pre_attach(parent)
-            parent_children = parent.__children_
-            assert self not in parent_children, "Tree internal data is corrupt."
-            # ATOMIC START
-            parent_children.append(self)
-            self.__parent = parent
-            # ATOMIC END
-            self._post_attach(parent)
-
-    @property
-    def __children_(self):
-        try:
-            return self.__children
-        except AttributeError:
-            self.__children = []
-            return self.__children
-
-    @property
-    def children(self):
-        """
-        All child nodes.
-
-        >>> from anytree import Node
-        >>> n = Node("n")
-        >>> a = Node("a", parent=n)
-        >>> b = Node("b", parent=n)
-        >>> c = Node("c", parent=n)
-        >>> n.children
-        (Node('/n/a'), Node('/n/b'), Node('/n/c'))
-
-        Modifying the children attribute modifies the tree.
-
-        **Detach**
-
-        The children attribute can be updated by setting to an iterable.
-
-        >>> n.children = [a, b]
-        >>> n.children
-        (Node('/n/a'), Node('/n/b'))
-
-        Node `c` is removed from the tree.
-        In case of an existing reference, the node `c` does not vanish and is the root of its own tree.
-
-        >>> c
-        Node('/c')
-
-        **Attach**
-
-        >>> d = Node("d")
-        >>> d
-        Node('/d')
-        >>> n.children = [a, b, d]
-        >>> n.children
-        (Node('/n/a'), Node('/n/b'), Node('/n/d'))
-        >>> d
-        Node('/n/d')
-
-        **Duplicate**
-
-        A node can just be the children once. Duplicates cause a :any:`TreeError`:
-
-        >>> n.children = [a, b, d, a]
-        Traceback (most recent call last):
-            ...
-        anytree.node.exceptions.TreeError: Cannot add node Node('/n/a') multiple times as child.
-        """
-        return tuple(self.__children_)
-
-    @staticmethod
-    def __check_children(children):
-        seen = set()
-        for child in children:
-            if not isinstance(child, NodeMixin):
-                msg = f"Cannot add non-node object {child}. It is not a subclass of 'NodeMixin'."
-                message_to_user(msg)
-                # raise TreeError(msg)
-            if child not in seen:
-                seen.add(child)
-            else:
-                msg = f"Cannot add node {child} multiple times as child."
-                message_to_user(msg)
-                # raise TreeError(msg)
-
-    @children.setter
-    def children(self, children):
-        # convert iterable to tuple
-        children = tuple(children)
-        NodeMixin.__check_children(children)
-        # ATOMIC start
-        old_children = self.children
-        del self.children
-        try:
-            self._pre_attach_children(children)
-            for child in children:
-                child.parent = self
-            self._post_attach_children(children)
-            assert len(self.children) == len(children)
-        except Exception:
-            self.children = old_children
-            raise
-        # ATOMIC end
-
-    @children.deleter
-    def children(self):
-        children = self.children
-        self._pre_detach_children(children)
-        for child in self.children:
-            child.parent = None
-        assert len(self.children) == 0
-        self._post_detach_children(children)
-
-    def _pre_detach_children(self, children):
-        """Method call before detaching `children`."""
-        pass
-
-    def _post_detach_children(self, children):
-        """Method call after detaching `children`."""
-        pass
-
-    def _pre_attach_children(self, children):
-        """Method call before attaching `children`."""
-        pass
-
-    def _post_attach_children(self, children):
-        """Method call after attaching `children`."""
-        pass
-
-    @property
-    def path(self):
-        """
-        Path of this `Node`.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.path
-        (Node('/Udo'),)
-        >>> marc.path
-        (Node('/Udo'), Node('/Udo/Marc'))
-        >>> lian.path
-        (Node('/Udo'), Node('/Udo/Marc'), Node('/Udo/Marc/Lian'))
-        """
-        return self._path
-
-    @property
-    def _path(self):
-        path = []
-        node = self
-        while node:
-            path.insert(0, node)
-            node = node.parent
-        return tuple(path)
-
-    @property
-    def ancestors(self):
-        """
-        All parent nodes and their parent nodes.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.ancestors
-        ()
-        >>> marc.ancestors
-        (Node('/Udo'),)
-        >>> lian.ancestors
-        (Node('/Udo'), Node('/Udo/Marc'))
-        """
-        return self._path[:-1]
-
-    @property
-    def anchestors(self):
-        """
-        All parent nodes and their parent nodes - see :any:`ancestors`.
-
-        The attribute `anchestors` is just a typo of `ancestors`. Please use `ancestors`.
-        This attribute will be removed in the 2.0.0 release.
-        """
-        # warnings.warn(".anchestors was a typo and will be removed in version 3.0.0", DeprecationWarning)
-        return self.ancestors
-
-    @property
-    def descendants(self):
-        """
-        All child nodes and all their child nodes.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> loui = Node("Loui", parent=marc)
-        >>> soe = Node("Soe", parent=lian)
-        >>> udo.descendants
-        (Node('/Udo/Marc'), Node('/Udo/Marc/Lian'), Node('/Udo/Marc/Lian/Soe'), Node('/Udo/Marc/Loui'))
-        >>> marc.descendants
-        (Node('/Udo/Marc/Lian'), Node('/Udo/Marc/Lian/Soe'), Node('/Udo/Marc/Loui'))
-        >>> lian.descendants
-        (Node('/Udo/Marc/Lian/Soe'),)
-        """
-        return tuple(PreOrderIter(self))[1:]
-
-    @property
-    def root(self):
-        """
-        Tree Root Node.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.root
-        Node('/Udo')
-        >>> marc.root
-        Node('/Udo')
-        >>> lian.root
-        Node('/Udo')
-        """
-        if self.parent:
-            return self._path[0]
-        else:
-            return self
-
-    @property
-    def siblings(self):
-        """
-        Tuple of nodes with the same parent.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> loui = Node("Loui", parent=marc)
-        >>> lazy = Node("Lazy", parent=marc)
-        >>> udo.siblings
-        ()
-        >>> marc.siblings
-        ()
-        >>> lian.siblings
-        (Node('/Udo/Marc/Loui'), Node('/Udo/Marc/Lazy'))
-        >>> loui.siblings
-        (Node('/Udo/Marc/Lian'), Node('/Udo/Marc/Lazy'))
-        """
-        parent = self.parent
-        if parent is None:
-            return tuple()
-        else:
-            return tuple([node for node in parent.children if node != self])
-
-    @property
-    def is_leaf(self):
-        """
-        `Node` has no children (External Node).
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.is_leaf
-        False
-        >>> marc.is_leaf
-        False
-        >>> lian.is_leaf
-        True
-        """
-        return len(self.__children_) == 0
-
-    @property
-    def is_root(self):
-        """
-        `Node` is tree root.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.is_root
-        True
-        >>> marc.is_root
-        False
-        >>> lian.is_root
-        False
-        """
-        return self.parent is None
-
-    @property
-    def height(self):
-        """
-        Number of edges on the longest path to a leaf `Node`.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.height
-        2
-        >>> marc.height
-        1
-        >>> lian.height
-        0
-        """
-        if self.__children_:
-            return max([child.height for child in self.__children_]) + 1
-        else:
-            return 0
-
-    @property
-    def depth(self):
-        """
-        Number of edges to the root `Node`.
-
-        >>> from anytree import Node
-        >>> udo = Node("Udo")
-        >>> marc = Node("Marc", parent=udo)
-        >>> lian = Node("Lian", parent=marc)
-        >>> udo.depth
-        0
-        >>> marc.depth
-        1
-        >>> lian.depth
-        2
-        """
-        return len(self._path) - 1
-
-    def _pre_detach(self, parent):
-        """Method call before detaching from `parent`."""
-        pass
-
-    def _post_detach(self, parent):
-        """Method call after detaching from `parent`."""
-        pass
-
-    def _pre_attach(self, parent):
-        """Method call before attaching to `parent`."""
-        pass
-
-    def _post_attach(self, parent):
-        """Method call after attaching to `parent`."""
-        pass
-
-
-class Node(NodeMixin, object):
-    """
-
-    """
-
-    def __init__(self, name, parent=None, **kwargs):
-        u"""
-        A simple tree node with a `name` and any `kwargs`.
-        >>> from anytree import Node, RenderTree
-        >>> root = Node("root")
-        >>> s0 = Node("sub0", parent=root)
-        >>> s0b = Node("sub0B", parent=s0, foo=4, bar=109)
-        >>> s0a = Node("sub0A", parent=s0)
-        >>> s1 = Node("sub1", parent=root)
-        >>> s1a = Node("sub1A", parent=s1)
-        >>> s1b = Node("sub1B", parent=s1, bar=8)
-        >>> s1c = Node("sub1C", parent=s1)
-        >>> s1ca = Node("sub1Ca", parent=s1c)
-        >>> print(RenderTree(root))
-        Node('/root')
-        ├── Node('/root/sub0')
-        │   ├── Node('/root/sub0/sub0B', bar=109, foo=4)
-        │   └── Node('/root/sub0/sub0A')
-        └── Node('/root/sub1')
-            ├── Node('/root/sub1/sub1A')
-            ├── Node('/root/sub1/sub1B', bar=8)
-            └── Node('/root/sub1/sub1C')
-                └── Node('/root/sub1/sub1C/sub1Ca')
-        """
-        self.__dict__.update(kwargs)
-        self._name = name
-        # self.name = name
-        self.parent = parent
-
-    @property
-    def name(self):
-        """Name."""
-        return self._name
-
-    @name.setter
-    def name(self, value):
-        self._name = value
-
-    # def __repr__(self):
-    #     args = ["%r" % self.separator.join([""] + [str(node.name) for node in self.path])]
-    #     return _repr(self, args=args)
-
-
-class Tree:
-    """
-    Tree constructor
-    """
-
-    def __init__(self, items=None):
-        self.changed = False
-        if items:
-            self.code_items = items
-        else:
-            self.code_items = CodeItems()
-
-
-        # custom class variables #########################
-        # root is the first/parent node for all QTreeWidgetItem children
-        self.script_root = Node('root').root
-        self.denodo_root = Node('root').root
-        self.depend_root = Node('root').root
-
-        # chapters are stored in a list of Chapters inherited from QTreeWidgetItem
-        self.chapters = list()
-
-        # initialize by adding empty chapters
-        self._add_chapters(CHAPTER_NAMES)
-        # changed is a boolean indicating a change in selection was made
-        self.changed = False
-        # mode of operation: see mode variable flags in vql_manager_core
-        self.mode = GUI_NONE
-        # storage_list to store items for different views
-        self.storage_list = list()
-        # view stores the current view
-        self.view = VQL_VIEW
-        # denodo_root is a reference to the root item of the denodo view
-        self.denodo_root = Chapter(None, 'root')
-        # color_filter used to filter items
-        self.color_filter = None
-
-    def _add_chapters(self, chapter_names: List[str]):
+    def add_chapters(self, chapter_names: List[str]):
         """Method that adds a chapter to the chapter list for every name given.
 
         :param chapter_names: list of chapter_names of type string
@@ -1818,39 +1857,48 @@ class Tree:
         :rtype: None
         """
         for chapter_name in chapter_names:
-            chapter = Chapter(chapter_name)
-            self.chapters.append(chapter)
+            Chapter(chapter_name, self)
 
-
-    def generate_tree(self, mode):
+    def get_code_items(self, chapter: Chapter=None):
         """
 
+        :return:
+        """
+        if chapter:
+            for code_item in chapter.code_items:
+                yield code_item
+        else:
+            for chapter_item in self.chapters:
+                for code_item in chapter_item.code_items:
+                    yield code_item
+
+    def remove_compare(self):
+        """
+
+        :return:
+        """
+        for chapter in self.chapters:
+            chapter.color = white
+            chapter.selected = True
+            chapter.tristate = False
+        to_be_removed = list()
+        for code_item in self.get_code_items():
+            to_be_removed.append(code_item.remove_compare())
+        for code_item in to_be_removed:
+            if code_item:
+                code_item.parent_item.remove_child(code_item)
+
+    def parse(self, file_content: str, mode: int, bar: QStatusBar, icons: dict, logger: LogWrapper):
+        """
+
+        :param file_content:
         :param mode:
+        :param bar:
+        :param icons:
+        :param logger:
         :return:
         """
-        pass
-
-    def get_code_items(self):
-        """
-
-        :return:
-        """
-        return (code_item for code_item in self.code_items.values())
-
-    async def parse(self, file_content: str, mode: int):
-        """Method that parses the denodo export file.
-
-        It analyzes it to construct/fill the VqlModel tree.
-
-        :param file_content: String with the denodo file
-        :type file_content: str
-        :param mode: the application mode, selecting or comparing
-        :param mode: int
-        :return: None
-        :rtype: None
-        """
-        logger.debug('Start parsing data.')
-        self.changed = False
+        logger.info('Start parsing data.')
         gui = GUI_NONE
 
         if mode & (BASE_FILE | BASE_REPO):
@@ -1858,10 +1906,7 @@ class Tree:
         elif mode & (COMP_FILE | COMP_REPO):
             gui = GUI_COMPARE
             # set all items to red, indicating they are lost.. this will later change if not
-            for code_item in self.get_code_items():
-                code_item.remove_compare()
-                if not code_item.data.code:
-                    self.code_items.pop(code_item.object_name, None)
+            # self.remove_compare()
 
         # remove possible crab above first chapter
         for chapter in self.chapters:
@@ -1891,150 +1936,78 @@ class Tree:
             chapter_objects = chapter_part.split(DELIMITER)[1:]  # split on CREATE OR REPLACE
             for chapter_object in chapter_objects:
                 code = DELIMITER + chapter_object  # << put back the delimiter
+                code = code
                 object_name = CodeItem.extract_object_name_from_code(chapter.name, code)  # extract object name
+                bar.showMessage(f"Loading: {object_name}")
+                logger.info(f"Loading: {object_name}")
                 if not object_name:
                     continue
                 if gui == GUI_SELECT:
                     # add the code item to the chapter
-                    item = CodeItem(chapter.name, mode, code=code)
-                    chapter.code_items.append(item)
-                    self.code_items.append_code_item(item)
+                    code_item = CodeItem(chapter, object_name)
+                    data = code_item.base_data
+                    data.code = code
+                    data.denodo_path = CodeItem.extract_denodo_folder_name_from_code(chapter.name, code)
+                    code_item.icon = icons[chapter.name]
 
                 elif mode & (COMP_FILE | COMP_REPO):   # COMPARE case
                     # Check if item exists, and where
-                    i = self.code_items.get_index(object_name)
+                    i = chapter.get_child_index_by_name(object_name)
                     if i > -1:
-                        existing_item = self.code_items[object_name]
-                        existing_item.set_compare_code(code, mode)  # set the new mode en code
+                        # an existing code item
+                        code_item = chapter.code_items[i]
+                        data = code_item.compare_data
+                        data.code = code
+                        data.denodo_path = CodeItem.extract_denodo_folder_name_from_code(chapter.name, code)
+                        base_code = code_item.base_data.code
+                        if code.strip() == base_code.strip():
+                            code_item.color = white
+                        else:
+                            code_item.color = yellow
                         index = i
                     else:  # code object does not yet exist
-                        item = CodeItem(chapter.name, mode, compare_code=code)
-                        chapter.code_items.insert(index + 1, item)
-                        self.code_items.insert_under(index, item)
+                        code_item = CodeItem(chapter, object_name, index=index + 1)
+                        data = code_item.compare_data
+                        data.code = code
+                        data.denodo_path = CodeItem.extract_denodo_folder_name_from_code(chapter.name, code)
+                        code_item.color = green
+                        code_item.icon = icons[chapter.name]
                         index += 1
 
-        self.get_dependencies(gui)
-
-        # self.get_dependees(gui)
+        if mode & (COMP_FILE | COMP_REPO):
+            for code_item in self.get_code_items():
+                if code_item.base_data.code and not code_item.compare_data.code:
+                    code_item.color = red
+                    code_item.set_selected(False)
+            for chapter in self.chapters:
+                chapter.set_color_based_on_children()
+        logger.info(f"Analyzing objects ...")
+        self.get_dependencies(gui, bar)
 
         # formatting the tree items
         if gui & GUI_SELECT:
             for code_item in self.get_code_items():
-                if code_item.dependees:
-                    code_item.set_color(red)
-            for chapter in self.chapters:
-                chapter.set_gui(gui)
-                chapter.set_color_based_on_children(gui, color=white)
-                if len(chapter.code_items) == 0:
-                    chapter.selected = False
+                data = code_item.get_context_data(gui)
+                if data.dependees:
+                    code_item.color = red
 
-        elif gui & GUI_COMPARE:
-            for code_item in self.get_code_items():
-                if code_item.color == red:
-                    code_item.setCheckState(0, UNCHECKED)
-            for chapter in self.chapters:
-                chapter.set_gui(gui)
-                chapter.set_color_based_on_children(gui)
-                if len(chapter.code_items) == 0:
-                    chapter.selected = False
-
-        self.build_script_tree(gui)
-        self.build_denodo_tree(gui)
-
-        logger.debug('Finished parsing data.')
-
-    def build_script_tree(self, gui)->bool:
-        """
-
-        :param gui:
-        :return:
-        """
-        for chapter in self.chapters:
-            chapter_node = Node(chapter.name, parent=self.script_root)
-            for code_item in self.code_items.get_chapter_items(chapter.name):
-                data = self.get_context_data(gui, code_item)
-                data.script_node = Node(code_item.object_name, parent=chapter_node)
+        logger.info('Finished parsing data.')
         return True
 
-    def build_denodo_tree(self, gui: int)->bool:
-        """Method that builds up the Denodo folder structure.
-
-        Using chapter items as folders and adds code_items as children.
-        This structure is stored in the storage list
-        and shown when the view is switched.
-        :param gui: flag to indicate compare or normal select operations
-        :type gui: int
-        :return: Success or not
-        :rtype: bool
-        """
-        folders = dict()
-
-        def child_exists(item_name: str, parent: Node) -> Union[Node, None]:
-            """
-            Checks if a folder was already created
-            :param parent: The parent chapter
-            :param item_name:
-            :return: True is yes
-            """
-            if not parent:
-                return None
-
-            for child in parent.children:
-                if child.name.lower() == item_name.lower():
-                    return child
-            return None
-
-        def get_folders():
-            """
-            Returns a dictionary with all denodo folder paths as key and a list of code_items in this path as value
-            :return:
-            """
-
-            for chapter in self.chapters:
-                for _code_item in self.code_items.get_chapter_items(chapter.name):
-                    if chapter.name != 'FOLDERS':
-                        data = self.get_context_data(gui, _code_item)
-                        denodo_path = data.denodo_path
-                        if gui & GUI_COMPARE and not denodo_path:  # account for lost items
-                            denodo_path = _code_item.data.denodo_path
-                        if denodo_path not in folders.keys():
-                            folders[denodo_path] = list()
-                            folders[denodo_path].append(_code_item)
-                        else:
-                            folders[denodo_path].append(_code_item)
-
-        root = self.denodo_root
-
-        folder_item = None
-        get_folders()
-        folder_parts = ((folder.parts, code_items) for folder, code_items in folders.items() if folder)
-
-        for parts, code_items in folder_parts:
-            old_parent = root
-            for part in parts:
-                if part != '/':
-                    folder_item = child_exists(part, old_parent)
-                    if not folder_item:
-                        folder_item = Node(part, parent=old_parent)
-                    old_parent = folder_item
-            if folder_item:
-                for code_item in code_items:
-                    data = self.get_context_data(gui, code_item)
-                    data.denodo_node = Node(code_item.object_name, parent=folder_item)
-
-                    # self.storage_list = root.takeChildren()
-        return True
-
-    def get_dependencies(self, gui: int):
+    def get_dependencies(self, gui: int, bar: QStatusBar):
         """Method with nifty code to extract en fill direct dependencies.
 
         Per code object upon other objects based on their vql code.
         :param gui: mode flag selector indicating what code is done
         :type gui: int
+        :param bar:
         :return: None
         :rtype: None
         """
+        # place holder in search strings that is unlikely in the code
+        place_holder = '%&*&__&*&%'
 
+        # helper function
         def unique_list(_list: list):
             """Function that turns a list into a list with unique items.
 
@@ -2046,16 +2019,13 @@ class Tree:
             :rtype: list
             """
             new_list = list()
-            for item in _list:
-                if item not in new_list:
-                    new_list.append(item)
+            for _item in _list:
+                if _item not in new_list:
+                    new_list.append(_item)
             return new_list
 
-        # place holder in search strings that is unlikely in the code
-        place_holder = '%&*&__&*&%'
-
         # helper function
-        def find_dependencies(_code_objects, _underlying_code_objects, _search_template):
+        def find_dependencies(_code_objects: list, _underlying_code_objects: list, _search_template: str):
             """
             Function finds and adds the direct dependencies of code objects
             in the lower-cased code of underlying objects.
@@ -2071,30 +2041,32 @@ class Tree:
             :rtype: None
             """
 
-            for code_object, code_object_name, code in _code_objects:
+            for _code_item, _, code in _code_objects:
+                bar.showMessage(f"Analyzing: {_code_item.name}")
                 for other_code_item, other_name, other_code in _underlying_code_objects:
                     search_string = _search_template.replace(place_holder, other_name)
                     if not code.find(search_string) == -1:
-                        data = self.get_context_data(gui, code_item)
-                        data.dependencies.append(other_code_item)
-                        data.dependees.append(code_object)
+                        _data = _code_item.get_context_data(gui)
+                        _data.dependencies.append(other_code_item)
+                        _data = other_code_item.get_context_data(gui)
+                        _data.dependees.append(_code_item)
 
         # helper function
-        def code_items_lower(_chapter_name):
+        def code_items_lower(_chapter: Chapter):
             """
             Returns a list of code items with their code and object names in lower case of a particular chapter
-            :param _chapter_name: the chapter name
-            :type _chapter_name: str
+            :param _chapter: the chapter name
+            :type _chapter: Chapter
             :return: the requested list of tuples
             :rtype: list(tuple(CodeItem, str, str))
             """
             items = None
             if gui & GUI_SELECT:
-                items = [(code_item, code_item.object_name.lower(), code_item.data.code.lower())
-                         for code_item in self.code_items.get_chapter_items(_chapter_name)]
+                items = [(_code_item, _code_item.name.lower(), _code_item.base_data.code.lower())
+                         for _code_item in self.get_code_items(chapter=_chapter)]
             elif gui & GUI_COMPARE:
-                items = [(code_item, code_item.object_name.lower(), code_item.compare_data.code.lower())
-                         for code_item in self.code_items.get_chapter_items(_chapter_name)]
+                items = [(_code_item, _code_item.name.lower(), _code_item.compare_data.code.lower())
+                         for _code_item in self.get_code_items(chapter=_chapter)]
             return items
 
         # construct the searches in a list of tuples:
@@ -2127,13 +2099,15 @@ class Tree:
 
         # perform the searches and store dependencies
         for chapter_name, underlying_chapter_name, search_template in searches:
-            code_objects = code_items_lower(chapter_name)
-            underlying_code_objects = code_items_lower(underlying_chapter_name)
+            chapter = Chapter.get_chapter_by_name(self.chapters, chapter_name)
+            underlying_chapter = Chapter.get_chapter_by_name(self.chapters, underlying_chapter_name)
+            code_objects = code_items_lower(chapter)
+            underlying_code_objects = code_items_lower(underlying_chapter)
             find_dependencies(code_objects, underlying_code_objects, search_template)
 
         # clean up the lists
         for code_item in self.get_code_items():
-            data = self.get_context_data(gui, code_item)
+            data = code_item.get_context_data(gui)
             # remove self references and double items in the dependencies and dependees lists
             if code_item in data.dependencies:
                 data.dependencies.remove(code_item)
@@ -2146,745 +2120,783 @@ class Tree:
             to_be_removed = list()
             for dependee in data.dependees:
                 if dependee in data.dependencies:
-                    to_be_removed.append(dependee.index())
-            for index in to_be_removed:
-                data.dependees.remove(data.dependees.[index])
+                    to_be_removed.append(dependee)
+            for item in to_be_removed:
+                data.dependees.remove(item)
 
-    @staticmethod
-    def get_context_data(gui, code_item):
+    def build_denodo_view(self, gui: int)->bool:
+        """Method that builds up the Denodo folder structure.
+
+        Using chapter items as folders and adds code_items as children.
+        This structure is stored in the storage list
+        and shown when the view is switched.
+        :param gui: flag to indicate compare or normal select operations
+        :type gui: int
+        :return: Success or not
+        :rtype: bool
+        """
+        folders = dict()
+
+        def child_exists(item_name: str, parent: TreeItem) -> Union[TreeItem, None]:
+            """
+            Checks if a folder was already created
+            :param parent: The parent chapter
+            :param item_name:
+            :return: True is yes
+            """
+            if not parent:
+                return None
+
+            for _child in parent.child_items:
+                if _child.name.lower() == item_name.lower():
+                    return _child
+            return None
+
+        def get_folders():
+            """
+            Returns a dictionary with all denodo folder paths as key and a list of code_items in this path as value
+            :return:
+            """
+
+            for chapter in self.chapters:
+                for _code_item in chapter.code_items:
+                    if chapter.name != 'FOLDERS':
+                        _data = _code_item.get_context_data(gui)
+                        denodo_path = _data.denodo_path
+                        if gui & GUI_COMPARE and not denodo_path:  # account for lost items
+                            denodo_path = _code_item.data.denodo_path
+                        if denodo_path not in folders.keys():
+                            folders[denodo_path] = list()
+                            folders[denodo_path].append(_code_item)
+                        else:
+                            folders[denodo_path].append(_code_item)
+
+        # noinspection PyBroadException
+        # try:
+        root = TreeItem(DenodoFolder)
+        folder_item = None
+        get_folders()
+        folder_parts = ((folder.parts, code_items) for folder, code_items in folders.items() if folder)
+
+        for parts, code_items in folder_parts:
+            old_parent = root
+            for part in parts:
+                if part != '/':
+                    folder_item = child_exists(part, old_parent)
+                    if not folder_item:
+                        folder_item = DenodoFolder(old_parent, part)
+                    old_parent = folder_item
+            if folder_item:
+                for code_item in code_items:
+                    code_item.set_parent(folder_item)
+
+        for child in root.child_items:
+            child.parent_item = self
+
+        self.storage_list = root.take_children()
+        # except Exception:
+        #     return False
+        return True
+
+    def get_part_logs(self, folder: Path):
+        """Gives all part.log data.
+
+        With log file names (key) and their content (values).
+        The content is a list of paths to the code items in a chapter.
+        This function is used to create a repository.
+        :param folder: The folder to save the repo to
+        :type folder: Path
+        :return: Iterator with filepaths and content
+        :rtype: generator of tuples: part_log_filepath, part_log_content
+        """
+        result = (chapter.get_part_log(folder) for chapter in self.chapters if chapter.selected)
+        return result
+
+    def get_code_as_file(self, mode: int, selected: bool)->str:
+        """Function that puts the code content in a single .vql file of all checked/selected items.
+        :param mode: GUI indicator saving either compare code or base code GUI_SELECT or GUI_COMPARE
+        :type mode: int
+        :param selected: Only selected items or not
+        :type selected: bool
+        :return: string of code content
+        :rtype: str
         """
 
-        :param gui:
+        code = [chapter.get_code_as_file(mode, selected) for chapter in self.chapters]
+        return PROP_QUOTE + '\n'.join(code)
+
+    def get_selected_code_files(self, mode: int, folder: Path)->List[Tuple[Path, str]]:
+        """Function for looping over all selected code items in the model.
+
+        This function is used to write the repository
+        :param mode: the mode to select which code; either GUI_SELECT or GUI_COMPARE
+        :type mode: int
+        :param folder: the proposed folder for storage
+        :type folder: Path
+        :return: an iterator with two unpacked values: filepath and code content
+        :rtype: list(tuple(Path, str))
+        """
+        item_path_code = list()
+        for chapter in self.chapters:
+            items = [code_item for code_item in chapter.code_items if code_item.selected]
+            chapter_folder = folder / chapter.name
+            for code_item in items:
+                item_path = code_item.get_file_path(chapter_folder)
+                if mode & COMP_LOADED:
+                    item_code = code_item.compare_data.code
+                elif mode & BASE_LOADED:
+                    item_code = code_item.base_data.code
+                else:
+                    item_code = ''
+                item_path_code.append((item_path, item_code))
+        return item_path_code
+
+
+class Dependee(TreeItem):
+        """
+        Wrapper Class representing a dependee code item
+        """
+        # noinspection PyMissingConstructor
+        def __init__(self, parent: Union[TreeItem, None], code_item: CodeItem, gui):
+            self.parent_item = parent
+            self.class_type = Dependee
+            self.name = code_item.name
+            self.code_item = code_item
+            self.column_data = [self.name]
+            self.tooltip = code_item.tooltip
+            self.child_items = list()
+            self.gui = gui
+            self.color = white
+            self.dependee_code_items = code_item.get_context_data(gui).dependees
+            for dependee in self.dependee_code_items:
+                child = Dependee(self, dependee, self.gui)
+                self.child_items.append(child)
+            self.node_type = TreeItem.BRANCH
+            self.selected = True
+            self.tristate = False
+            self.icon = code_item.icon
+
+        def clear(self):
+            """
+
+            :return:
+            """
+            self.dependee_code_items = None
+            self.column_data = None
+            super().clear()
+
+
+class DependencyModel(QAbstractItemModel):
+    """
+    Filter proxy model for treeview3
+    """
+    def __init__(self, parent: QTreeView, header: str):
+        """
+
+        :param parent:
+        """
+        super(DependencyModel, self).__init__(parent)
+        self.base_header = header
+        self.header = header
+        self.root_item = None
+        self.root_code_item = None
+        self.gui = GUI_SELECT
+
+    def recurse_dependees(self, recurse: int, parent: Dependee):
+        """
+
+        :param recurse:
+        :param parent:
+        :return:
+        """
+        recurse += 1
+        if recurse == 700:
+            return
+        for dependee_code_item in parent.dependee_code_items:
+            dependee = Dependee(parent, dependee_code_item, self.gui)
+            self.recurse_dependees(recurse, dependee)
+
+    def set_root_code_item(self, code_item):
+        """
+
         :param code_item:
         :return:
         """
-        if gui & GUI_SELECT:
-            data = code_item.data
-        elif gui & GUI_COMPARE:
-            data = code_item.compare_data
+        self.root_code_item = code_item
+        self.beginResetModel()
+        if code_item:
+            self.header = self.base_header + ": " + code_item.name
+            self.root_item = Dependee(None, code_item, self.gui)
+            self.recurse_dependees(0, self.root_item)
         else:
-            data= None
-        return data
+            self.header = self.base_header
+            self.root_item = None
+        self.endResetModel()
+
+    def get_root_code_item(self):
+        """
+
+        :return:
+        """
+        return self.root_code_item
+
+    def headerData(self, section: int, orientation, role: int=None)-> QVariant:
+        """
+        Called to supply the header
+        :param section:
+        :param orientation:
+        :param role:
+        :return:
+        """
+
+        if role in [DISPLAY, EDIT]:
+            if orientation == Qt.Horizontal:
+                if section == 0:
+                    return QVariant(self.header)
+        return NOTHING
+
+    def flags(self, index: QModelIndex):
+        """
+
+        :param index:
+        :return:
+        """
+        if index.isValid():
+            flags = super(DependencyModel, self).flags(index)
+            flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable
+            flags ^= Qt.ItemIsUserCheckable
+            return flags
+        else:
+            return Qt.NoItemFlags
+
+    def data(self, index: QModelIndex, role: int=None)->QVariant:
+        """
+        Provider function for the model and view
+        :param index:
+        :param role:
+        :return:
+        """
+        if role == CHECK:
+            return NOTHING
+
+        if self.root_item:
+            if index.column() == 0:
+                if role in ROLES:
+                    item = self.item_for_index(index)
+                    data = item.get_role_data(role, index.column())
+                    return QVariant(data)
+                elif role == Qt.FontRole:
+                    return QVariant(FONT)
+        return NOTHING
+
+    def index(self, row: int, column: int, parent: Union[QModelIndex, None]=None, *args, **kwargs):
+        """generate an index for this item
+
+        :param row:
+        :param column:
+        :param parent:
+        :return:
+        """
+        if not self.hasIndex(row, column, parent):
+            return QModelIndex()
+        if not self.root_item:
+            return QModelIndex()
+
+        parent_item = self.item_for_index(parent)
+        if parent_item.has_children() and 0 <= row < parent_item.child_count():
+            child = parent_item.child(row)
+            if 0 <= column < child.column_count():
+                index = self.createIndex(row, column, child)
+                return index
+
+        # print(f"call def index:    row: {row},  col:{column};  parent ...")
+        return QModelIndex()
+
+    def parent(self, index: Union[QModelIndex, None]=None):
+        """find the parent index"""
+        if not self.root_item:
+            return QModelIndex()
+
+        if not index.isValid():
+            return QModelIndex()
+
+        item = self.item_for_index(index)
+        parent_item = item.parent_item
+
+        if parent_item is self.root_item:
+            return QModelIndex()
+        else:
+            return self.createIndex(parent_item.child_number(), 0, parent_item)
+
+    def rowCount(self, parent: QModelIndex=None, *args, **kwargs)->int:
+        """how many items?"""
+        if not self.root_item:
+            return 0
+        if not parent.isValid():
+            return self.root_item.child_count()
+        if parent.column() > 0:
+            return 0
+        parent_item = parent.internalPointer()
+        return parent_item.child_count()
+
+    def columnCount(self, parent: QModelIndex=None, *args, **kwargs)->int:
+        """how many columns does this node have?"""
+        if not self.root_item:
+            return 1
+        if not parent.isValid():
+            return self.root_item.column_count()
+
+        parent_item = parent.internalPointer()
+        if parent_item.has_children():
+            child = parent_item.child(0)
+            return child.column_count()
+        else:
+            return 0
+
+    def item_for_index(self, index: QModelIndex)->Union[TreeItem, RootItem]:
+        """
+
+        :param index:
+        :return:
+        """
+        if index.isValid():
+            item = index.internalPointer()
+            if item:
+                return item
+        return self.root_item
+
+    def hasChildren(self, parent: QModelIndex=None, *args, **kwargs):
+        """
+        does it?
+        :param parent:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        if not self.root_item:
+            return False
+        if not parent.isValid():
+            return self.root_item.has_children()
+        if parent.column() > 0:
+            return False
+        parent_item = self.item_for_index(parent)
+        if parent_item:
+            return parent_item.has_children()
+        return False
 
 
+class ColorProxyModel(QSortFilterProxyModel):
+    """
+    Filter proxy for treeview1
+    """
+    def __init__(self, parent: QTreeView, header: str):
+        """
+
+        :param parent:
+        """
+        super(ColorProxyModel, self).__init__(parent)
+        # self.setFilterRole(COLOR)
+        self.setDynamicSortFilter(False)
+        self.header = header
+        self.color_filter = None
+        self.type_filter = None
+
+    def set_color_filter(self, color: str, type_filter):
+        """
+
+        :param color:
+        :param type_filter:
+        :return:
+        """
+
+        if color != self.color_filter:
+            self.beginResetModel()
+            self.type_filter = type_filter
+            self.color_filter = color
+            self.endResetModel()
+
+    def headerData(self, section: int, orientation, role: int=None)-> QVariant:
+        """
+        Called to supply the header
+        :param section:
+        :param orientation:
+        :param role:
+        :return:
+        """
+
+        if role in [DISPLAY, EDIT]:
+            if orientation == Qt.Horizontal:
+                if section == 0:
+                    return QVariant(self.header)
+        return NOTHING
+
+    def flags(self, index: QModelIndex):
+        """
+
+        :param index:
+        :return:
+        """
+        if index.isValid():
+            flags = super(ColorProxyModel, self).flags(index)
+            flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsAutoTristate | Qt.ItemIsUserCheckable
+            return flags
+        else:
+            return Qt.NoItemFlags
+
+    def filterAcceptsRow(self, source_row: int, parent: QModelIndex):
+        """
+
+        :param source_row:
+        :param parent:
+        :return:
+        """
+        source_col = 0
+        source_item = self.sourceModel().index(source_row, source_col, parent).internalPointer()
+
+        if source_item:
+            if self.color_filter and self.type_filter:
+                if source_item.class_type == self.type_filter:
+                    if source_item.color == self.color_filter:
+                        return True
+                    else:
+                        return False
+                if source_item.has_children():
+                    return True
+                else:
+                    return False
+        return True
+
+    def filterAcceptsColumn(self, source_column, parent: QModelIndex):
+        """
+
+        :param source_column:
+        :param parent:
+        :return:
+        """
+        return source_column == 0
+        # return True
+
+    def data(self, index: QModelIndex, role: int=None)->QVariant:
+        """
+
+        :param index:
+        :param role:
+        :return:
+        """
+
+        if index.column() == 0:
+            return super(ColorProxyModel, self).data(index, role)
 
 
-    # def get_dependees(self, gui: int):
-    #     """Method that fills the code item's dependees list.
-    #
-    #     Only direct dependees (objects that depend on this object) are stored.
-    #     :param gui: The mode flag of operation
-    #     :type gui: int
-    #     :return: None
-    #     :rtype: None
-    #     """
-    #
-    #     for chapter, item in self.get_code_items():
-    #         # make unique
-    #         dependencies = None
-    #         dependees = None
-    #
-    #         if gui & GUI_SELECT:
-    #             dependencies = item.dependencies
-    #             dependees = item.dependees
-    #         elif gui & GUI_COMPARE:
-    #             dependencies = item.compare_dependencies
-    #             dependees = item.compare_dependees
-    #
-    #         dependencies = self.unique_list(dependencies)
-    #
-    #         # remove item itself (maybe from a join on itself)
-    #         if item in dependencies:
-    #             dependencies.remove(item)
-    #
-    #         # construct list of dependees, of which this item is a parent
-    #         for item_dependency in dependencies:
-    #             if gui & GUI_SELECT:
-    #                 item_dependency.dependees.append(item)
-    #             elif gui & GUI_COMPARE:
-    #                 item_dependency.compare_dependees.append(item)
-    #
-    #         dependees = self.unique_list(dependees)
-    #
-    #         if gui & GUI_SELECT:
-    #             item.dependencies = dependencies
-    #             item.dependees = dependees
-    #         elif gui & GUI_COMPARE:
-    #             item.compare_dependencies = dependencies
-    #             item.compare_dependees = dependees
+class SelectionProxyModel(QSortFilterProxyModel):
+    """
+    Filter proxy for treeview2
+    """
+    def __init__(self, parent: QTreeView, header: str):
+        """
+
+        :param parent:
+        """
+        super(SelectionProxyModel, self).__init__(parent)
+        self.setFilterRole(CHECK)
+        self.setDynamicSortFilter(True)
+        self.header = header
+
+    def headerData(self, section: int, orientation, role: int=None)-> QVariant:
+        """
+        Called to supply the header
+        :param section:
+        :param orientation:
+        :param role:
+        :return:
+        """
+
+        if role in [DISPLAY, EDIT]:
+            if orientation == Qt.Horizontal:
+                if section == 0:
+                    return QVariant(self.header)
+        return NOTHING
+
+    def flags(self, index: QModelIndex):
+        """
+
+        :param index:
+        :return:
+        """
+        if index.isValid():
+            flags = super(SelectionProxyModel, self).flags(index)
+            flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable
+            flags ^= Qt.ItemIsUserCheckable
+            return flags
+        else:
+            return Qt.NoItemFlags
+
+    def filterAcceptsRow(self, source_row: int, parent: QModelIndex):
+        """
+
+        :param source_row:
+        :param parent:
+        :return:
+        """
+        source_col = 0
+        source_item = self.sourceModel().index(source_row, source_col, parent).internalPointer()
+        if source_item:
+            if isinstance(source_item, (Chapter, DenodoFolder)):
+                if not source_item.selected:
+                    selected = False
+                elif source_item.has_children():
+                    selected = True
+                else:
+                    selected = False
+            elif isinstance(source_item, CodeItem):
+                selected = source_item.selected
+            else:
+                return False
+            return selected
+        return False
+
+    def filterAcceptsColumn(self, source_column, parent: QModelIndex):
+        """
+
+        :param source_column:
+        :param parent:
+        :return:
+        """
+        return source_column == 0
+
+    def data(self, index: QModelIndex, role: int=None)->QVariant:
+        """
+        Provider function for the model and view
+        :param index:
+        :param role:
+        :return:
+        """
+        if role == CHECK:
+            return NOTHING
+        else:
+            if index.column() == 0:
+                return super(SelectionProxyModel, self).data(index, role)
 
 
-# class VqlModel2(QTreeWidget):
-#     """VqlModel class represents all objects in a Denodo database.
-#
-#     The VqlModel class also represents a Repository file structure.
-#     The Chapter class is the owner/parent of the Chapter instances.
-#     It inherits from QTreeWidget, so it can display in a QMainWindow or QWidget.
-#     In this application it is instanced as: all_chapter_treeview.
-#     The purpose of this class is to make GUI based selections.
-#     """
-#
-#     def __init__(self, parent: Union[QWidget, None]):
-#         """Constructor of the class.
-#
-#         Mostly setting the stage for the behavior of the QTreeWidget.
-#
-#         :param parent: the object holding this instance, a central widget of the QMainWindow
-#         :type parent: QWidget
-#         """
-#         super(VqlModel2, self).__init__(parent)
-#
-#         # custom class variables #########################
-#         # root is the first/parent node for all QTreeWidgetItem children
-#         self.root = self.invisibleRootItem()
-#
-#         # chapters are stored in a list of Chapters inherited from QTreeWidgetItem
-#         self.chapters = list()
-#
-#         # initialize by adding empty chapters
-#         self._add_chapters(CHAPTER_NAMES)
-#         # changed is a boolean indicating a change in selection was made
-#         self.changed = False
-#         # mode of operation: see mode variable flags in vql_manager_core
-#         self.mode = GUI_NONE
-#         # storage_list to store items for different views
-#         self.storage_list = list()
-#         # view stores the current view
-#         self.view = VQL_VIEW
-#         # denodo_root is a reference to the root item of the denodo view
-#         self.denodo_root = Chapter(None, 'root')
-#         # color_filter used to filter items
-#         self.color_filter = None
-#
-#     def pack(self):
-#         """Packs all data of the tree into UserData of the QTreeWidgetItems.
-#
-#         :return: None
-#         :rtype: None
-#         """
-#         for chapter in self.chapters:
-#             chapter.pack(self.color_filter)
-#
-#     @staticmethod
-#     def unpack(tree: QTreeWidget):
-#         """Unpacks the data from QtreeWidgetItem's Userdata.
-#
-#         It also prunes the tree on checked items only with children
-#         :param tree: The QtreeWidget to work on
-#         :type tree: QtreeWidget
-#         :return: None
-#         :rtype: None
-#         """
-#         deletes = list()
-#         for i in range(tree.topLevelItemCount()):
-#             child = tree.topLevelItem(i)
-#             if (child.childCount() == 0) or (child.checkState(0) == UNCHECKED):
-#                 deletes.append(child)
-#             else:
-#                 item_class = child.data(0, Qt.UserRole)['class_type']
-#                 item_class.unpack(child)
-#         for child in reversed(deletes):
-#             tree.takeTopLevelItem(tree.indexOfTopLevelItem(child))
-#
-#     def _add_chapters(self, chapter_names: List[str]):
-#         """Method that adds a chapter to the chapter list for every name given.
-#
-#         :param chapter_names: list of chapter_names of type string
-#         :type chapter_names: list
-#         :return: None
-#         :rtype: None
-#         """
-#         for chapter_name in chapter_names:
-#             chapter = Chapter(self.root, chapter_name)
-#             self.chapters.append(chapter)
-#
-#     def get_code_items(self, chapter_list=None)->Tuple[Chapter, CodeItem]:
-#         """Generator to loop all code items.
-#
-#         Optionally a list with chapter names may be given as a filter.
-#         Only chapter names in the lis are then included.
-#
-#         :param chapter_list: Optional list with chapter names
-#         :type chapter_list: list
-#         :return: Yields a tuple of chapter and code_item
-#         :rtype: Tuple[Chapter, CodeItem]
-#         """
-#         if chapter_list:
-#             chapters = (chapter for chapter in self.chapters if chapter.name in chapter_list)
-#         else:
-#             chapters = (chapter for chapter in self.chapters)
-#
-#         for chapter in chapters:
-#             for code_item in chapter.code_items:
-#                 yield (chapter, code_item)
-#
-#     def get_code_as_file(self, mode: int, selected: bool)->str:
-#         """Function that puts the code content in a single .vql file of all checked/selected items.
-#         :param mode: GUI indicator saving either compare code or base code GUI_SELECT or GUI_COMPARE
-#         :type mode: int
-#         :param selected: Only selected items or not
-#         :type selected: bool
-#         :return: string of code content
-#         :rtype: str
-#         """
-#
-#         code = [chapter.get_code_as_file(mode, selected) for chapter in self.chapters]
-#         return PROP_QUOTE + '\n'.join(code)
-#
-#     def get_part_logs(self, folder: Path):
-#         """Gives all part.log data.
-#
-#         With log file names (key) and their content (values).
-#         The content is a list of paths to the code items in a chapter.
-#         This function is used to create a repository.
-#         :param folder: The folder to save the repo to
-#         :type folder: Path
-#         :return: Iterator with filepaths and content
-#         :rtype: generator of tuples: part_log_filepath, part_log_content
-#         """
-#         result = (chapter.get_part_log(folder) for chapter in self.chapters if chapter.is_selected())
-#         return result
-#
-#     def get_selected_code_files(self, mode: int, folder: Path)->List[Tuple[Path, str]]:
-#         """Function for looping over all selected code items in the model.
-#
-#         This function is used to write the repository
-#         :param mode: the mode to select which code; either GUI_SELECT or GUI_COMPARE
-#         :type mode: int
-#         :param folder: the proposed folder for storage
-#         :type folder: Path
-#         :return: an iterator with two unpacked values: filepath and code content
-#         :rtype: list(tuple(Path, str))
-#         """
-#
-#         item_path_code = list()
-#         for chapter in self.chapters:
-#             items = chapter.selected_items()
-#             chapter_folder = folder / chapter.name
-#             for code_item in items:
-#                 item_path = code_item.get_file_path(chapter_folder)
-#                 if mode & GUI_SELECT:
-#                     item_code = code_item.code
-#                 elif mode & GUI_COMPARE:
-#                     item_code = code_item.compare_code
-#                 else:
-#                     item_code = ''
-#                 item_path_code.append((item_path, item_code))
-#         return item_path_code
-#
-#     def get_chapter_by_name(self, chapter_name: str)->Chapter:
-#         """Function that returns a chapter from the 'chapters' list by its name.
-#
-#         :param chapter_name: the name of the particular chapter requested
-#         :type chapter_name: str
-#         :return: A single chapter
-#         :rtype: Chapter
-#         """
-#         chapter = None
-#         for chapter in self.chapters:
-#             if chapter.name == chapter_name:
-#                 break
-#         return chapter
-#
-#     def switch_mode(self, new_mode: int):
-#         """Method to switch mode on the tree item, sets appropriate headers and tooltips.
-#
-#         :param new_mode: The new mode
-#         :type new_mode: int
-#         :return: None
-#         """
-#
-#         if new_mode & GUI_NONE:
-#             self.setHeaderLabel('')
-#             self.setToolTip('No model loaded, Open a file or repository')
-#         if new_mode & GUI_SELECT:
-#             self.setHeaderLabel('Selection Pane')
-#             self.setToolTip('Check the parts you like to select')
-#         elif new_mode & GUI_COMPARE:
-#             self.setHeaderLabel('Compare Pane')
-#             self.setToolTip('Select items')
-#             self.setToolTipDuration(1000)
-#
-#     async def parse(self, file_content: str, mode: int):
-#         """Method that parses the denodo export file.
-#
-#         It analyzes it to construct/fill the VqlModel tree.
-#
-#         :param file_content: String with the denodo file
-#         :type file_content: str
-#         :param mode: the application mode, selecting or comparing
-#         :param mode: int
-#         :return: None
-#         :rtype: None
-#         """
-#         logger.debug('Start parsing data.')
-#         self.changed = False
-#         gui = GUI_NONE
-#
-#         if mode & (BASE_FILE | BASE_REPO):
-#             gui = GUI_SELECT
-#         elif mode & (COMP_FILE | COMP_REPO):
-#             gui = GUI_COMPARE
-#             # set all items to red, indicating they are lost.. this will later change if not
-#             for _, code_item in self.get_code_items():
-#                 code_item.set_compare_code('', mode)
-#
-#         # remove possible crab above first chapter
-#         for chapter in self.chapters:
-#             start_index = file_content.find(chapter.header)
-#             if not start_index == -1:
-#                 file_content = file_content[start_index:]
-#                 break
-#
-#         # construct a list with indices where chapters start
-#         indices = list()
-#         for chapter in self.chapters:
-#             start_string_index = file_content.find(chapter.header)
-#             if start_string_index == -1:
-#                 continue
-#             indices.append((chapter, start_string_index))
-#         indices.append(('', len(file_content)))
-#
-#         # extract data from the file
-#         # zip the indices shifted one item to get start and end of the chapter code
-#         for start_tuple, end_tuple in zip(indices[:-1], indices[1:]):
-#             index = 0
-#             chapter, start = start_tuple
-#             next_chapter, end = end_tuple
-#             if start == -1:
-#                 continue
-#             chapter_part = file_content[start:end]   # << contains chapter code
-#             chapter_objects = chapter_part.split(DELIMITER)[1:]  # split on CREATE OR REPLACE
-#             for chapter_object in chapter_objects:
-#                 code = DELIMITER + chapter_object  # << put back the delimiter
-#                 object_name = CodeItem.extract_object_name_from_code(chapter.name, code)  # extract object name
-#                 if not object_name:
-#                     continue
-#                 if gui == GUI_SELECT:
-#                     # add the code item to the chapter
-#                     chapter.code_items.append(CodeItem(chapter, chapter.name, mode, code=code))
-#
-#                 elif mode & (COMP_FILE | COMP_REPO):   # COMPARE case
-#                     # Check if item exists, and where
-#                     i, existing_item = chapter.get_code_item_by_object_name(object_name)
-#                     if existing_item:
-#                         existing_item.set_compare_code(code, mode)  # set the new mode en code
-#                         index = i
-#                     else:  # code object does not yet exist
-#                         index_child = chapter.child(index)
-#                         # add the new object under the indexed child
-#                         chapter.code_items.insert(index,
-#                                                   CodeItem(chapter, chapter.name, mode,
-#                                                            compare_code=code, preceding=index_child))
-#                         index += 1
-#
-#         self.get_dependencies(gui)
-#         self.get_dependees(gui)
-#
-#         # formatting the tree items
-#         if gui & GUI_SELECT:
-#             for _, code_item in self.get_code_items():
-#                 if code_item.dependees:
-#                     code_item.set_color(red)
-#             for chapter in self.chapters:
-#                 chapter.set_gui(gui)
-#                 chapter.set_color_based_on_children(gui, color=white)
-#                 if chapter.childCount() == 0:
-#                     chapter.setCheckState(0, UNCHECKED)
-#
-#         elif gui & GUI_COMPARE:
-#             for _, code_item in self.get_code_items():
-#                 if code_item.color == red:
-#                     code_item.setCheckState(0, UNCHECKED)
-#             for chapter in self.chapters:
-#                 chapter.set_gui(gui)
-#                 chapter.set_color_based_on_children(gui)
-#                 if chapter.childCount() == 0:
-#                     chapter.setCheckState(0, UNCHECKED)
-#
-#         logger.debug('Finished parsing data.')
-#
-#     def get_dependencies(self, gui: int):
-#         """Method with nifty code to extract en fill direct dependencies.
-#
-#         Per code object upon other objects based on their vql code.
-#         :param gui: mode flag selector indicating what code is done
-#         :type gui: int
-#         :return: None
-#         :rtype: None
-#         """
-#
-#         # place holder in search strings that is unlikely in the code
-#         place_holder = '%&*&__&*&%'
-#
-#         # helper function
-#         def find_dependencies(_code_objects, _underlying_code_objects, _search_template):
-#             """
-#             Function finds and adds the direct dependencies of code objects
-#             in the lower-cased code of underlying objects.
-#             Basically it looks for the code_item's object name in the code of the underlying objects
-#             via a particular search string per chapter type
-#             :param _code_objects: a list of tuples (code object, object name, code)
-#             :type _code_objects: list(tuple(CodeItem, str, str))
-#             :param _underlying_code_objects: a list of tuples (code object, object name, code) of underlying objects
-#             :type _underlying_code_objects: list(tuple(CodeItem, str, str))
-#             :param _search_template: a template for the search string in which the object names can be put
-#             :type _search_template: str
-#             :return: None
-#             :rtype: None
-#             """
-#
-#             for code_object, code_object_name, code in _code_objects:
-#                 for other_code_item, other_name, other_code in _underlying_code_objects:
-#                     search_string = _search_template.replace(place_holder, other_name)
-#                     if not code.find(search_string) == -1:
-#                         if gui & GUI_SELECT:
-#                             code_object.dependencies.append(other_code_item)
-#                         elif gui & GUI_COMPARE:
-#                             code_object.compare_dependencies.append(other_code_item)
-#
-#         # helper function
-#         def code_items_lower(_code_object_chapter_name):
-#             """
-#             Returns a list of code items with their code and object names in lower case of a particular chapter
-#             :param _code_object_chapter_name: the chapter name
-#             :type _code_object_chapter_name: str
-#             :return: the requested list of tuples
-#             :rtype: list(tuple(CodeItem, str, str))
-#             """
-#             items = None
-#             if gui & GUI_SELECT:
-#                 items = [(code_item, code_item.object_name.lower(), code_item.code.lower())
-#                          for code_item in self.get_chapter_by_name(_code_object_chapter_name).code_items]
-#             elif gui & GUI_COMPARE:
-#                 items = [(code_item, code_item.object_name.lower(), code_item.compare_code.lower())
-#                          for code_item in self.get_chapter_by_name(_code_object_chapter_name).code_items]
-#             return items
-#
-#         # construct the searches in a list of tuples:
-#         # 1 the items analysed
-#         # 2 the underlying items
-#         # 3 the search string template
-#
-#         searches = list()
-#         searches.append(('WRAPPERS', 'DATASOURCES', f"datasourcename={place_holder}"))
-#         searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (jdbc {place_holder})"))
-#         searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (df {place_holder})"))
-#         searches.append(('BASE VIEWS', 'WRAPPERS', f"wrapper (ldap {place_holder})"))
-#
-#         for i in range(15):
-#             parentheses = '(' * i
-#             searches.append(('VIEWS', 'BASE VIEWS', f"from {parentheses}{place_holder}"))
-#             searches.append(('VIEWS', 'BASE VIEWS', f"join {parentheses}{place_holder}"))
-#         # searches.append(('VIEWS', 'BASE VIEWS', f"from {place_holder}"))
-#         # searches.append(('VIEWS', 'BASE VIEWS', f"from ({place_holder}"))
-#         # searches.append(('VIEWS', 'BASE VIEWS', f"join {place_holder}"))
-#         searches.append(('VIEWS', 'BASE VIEWS', f"set implementation {place_holder}"))
-#         searches.append(('VIEWS', 'BASE VIEWS', f"datamovementplan = {place_holder}"))
-#
-#         # searches.append(('VIEWS', 'VIEWS', f"from {place_holder}"))
-#         for i in range(15):
-#             parentheses = '(' * i
-#             searches.append(('VIEWS', 'VIEWS', f"from {parentheses}{place_holder}"))
-#             searches.append(('VIEWS', 'VIEWS', f"join {parentheses}{place_holder}"))
-#         searches.append(('VIEWS', 'VIEWS', f"set implementation {place_holder}"))
-#         searches.append(('VIEWS', 'VIEWS', f"datamovementplan = {place_holder}"))
-#
-#         searches.append(('ASSOCIATIONS', 'VIEWS', f" {place_holder} "))
-#
-#         # perform the searches and store dependencies
-#         for chapter_name, underlying_chapter_name, search_template in searches:
-#             code_objects = code_items_lower(chapter_name)
-#             underlying_code_objects = code_items_lower(underlying_chapter_name)
-#             find_dependencies(code_objects, underlying_code_objects, search_template)
-#
-#     def get_dependees(self, gui: int):
-#         """Method that fills the code item's dependees list.
-#
-#         Only direct dependees (objects that depend on this object) are stored.
-#         :param gui: The mode flag of operation
-#         :type gui: int
-#         :return: None
-#         :rtype: None
-#         """
-#
-#         for chapter, item in self.get_code_items():
-#             # make unique
-#             dependencies = None
-#             dependees = None
-#
-#             if gui & GUI_SELECT:
-#                 dependencies = item.dependencies
-#                 dependees = item.dependees
-#             elif gui & GUI_COMPARE:
-#                 dependencies = item.compare_dependencies
-#                 dependees = item.compare_dependees
-#
-#             dependencies = self.unique_list(dependencies)
-#
-#             # remove item itself (maybe from a join on itself)
-#             if item in dependencies:
-#                 dependencies.remove(item)
-#
-#             # construct list of dependees, of which this item is a parent
-#             for item_dependency in dependencies:
-#                 if gui & GUI_SELECT:
-#                     item_dependency.dependees.append(item)
-#                 elif gui & GUI_COMPARE:
-#                     item_dependency.compare_dependees.append(item)
-#
-#             dependees = self.unique_list(dependees)
-#
-#             if gui & GUI_SELECT:
-#                 item.dependencies = dependencies
-#                 item.dependees = dependees
-#             elif gui & GUI_COMPARE:
-#                 item.compare_dependencies = dependencies
-#                 item.compare_dependees = dependees
-#
-#     @staticmethod
-#     def unique_list(_list: list):
-#         """Function that turns a list into a list with unique items.
-#
-#         Keeping the sort order.
-#
-#         :param _list: the list to make unique
-#         :type _list: list
-#         :return: the list made unique
-#         :rtype: list
-#         """
-#         new_list = list()
-#         for item in _list:
-#             if item not in new_list:
-#                 new_list.append(item)
-#         return new_list
-#
-#     def change_view(self, mode: int)->bool:
-#         """Method that swaps the tree items from VQL View to Denodo file structure view and back.
-#
-#         The actual switch is done in switch_view function.
-#         This function handles the surrounding aspects.
-#
-#         :param mode: the mode flag with bits for the new view either VQL_VIEW or DENODO_VIEW
-#         :type mode: int
-#         :return: Success or not
-#         :rtype: bool
-#         """
-#
-#         if self.view & mode:
-#             return True
-#         if mode & VQL_VIEW:
-#             if self.storage_list:
-#                 self.switch_view()
-#                 self.view = VQL_VIEW
-#                 return True
-#         elif mode & DENODO_VIEW:
-#             if not self.storage_list:
-#                 if not self.build_denodo_view(mode):
-#                     return False
-#             self.switch_view()
-#             self.view = DENODO_VIEW
-#             return True
-#
-#     def switch_view(self):
-#         """Method to switch view between VQL or Denodo file structure.
-#
-#         Store the children of the root item of the tree widget
-#         and replace them with the stored ones.
-#         :return: None
-#         :rtype: None
-#         """
-#
-#         temp = self.root.takeChildren()
-#         self.root.addChildren(self.storage_list)
-#         self.storage_list = temp
-#
-#     def build_denodo_view(self, gui: int)->bool:
-#         """Method that builds up the Denodo folder structure.
-#
-#         Using chapter items as folders and adds code_items as children.
-#         This structure is stored in the storage list
-#         and shown when the view is switched.
-#         :param gui: flag to indicate compare or normal select operations
-#         :type gui: int
-#         :return: Success or not
-#         :rtype: bool
-#         """
-#         def child_exists(parent: Union[QTreeWidgetItem, Chapter], item_name: str)->Union[Chapter, None]:
-#             """
-#             Checks if a folder was already created
-#             :param parent: The parent chapter
-#             :param item_name:
-#             :return: True is yes
-#             """
-#             for i in range(parent.childCount()):
-#                 child = parent.child(i)
-#                 if child.class_type == Chapter:
-#                     if child.name.lower() == item_name.lower():
-#                         return child
-#             return None
-#
-#         def get_folders():
-#             """
-#             Returns a dictionary with all denodo folder paths as key and a list of code_items in this path as value
-#             :return:
-#             """
-#             folders = dict()
-#             for chapter, _code_item in self.get_code_items():
-#                 if chapter.name != 'FOLDERS':
-#                     if gui & GUI_SELECT:
-#                         denodo_folder = _code_item.denodo_folder
-#                     elif gui & GUI_COMPARE:
-#                         if _code_item.compare_denodo_folder:
-#                             denodo_folder = _code_item.compare_denodo_folder
-#                         else:
-#                             if _code_item.denodo_folder:
-#                                 denodo_folder = _code_item.denodo_folder
-#                     if denodo_folder not in folders.keys():
-#                         folders[denodo_folder] = list()
-#                         folders[denodo_folder].append(_code_item)
-#                     else:
-#                         folders[denodo_folder].append(_code_item)
-#             return folders
-#
-#         self.pack()
-#         temp_widget = VqlModel(None)
-#         temp_root = temp_widget.denodo_root
-#
-#         folder_item = None
-#         folders = get_folders()
-#         folder_parts = ((folder.parts, code_items) for folder, code_items in folders.items() if folder)
-#
-#         for parts, code_items in folder_parts:
-#             old_parent = temp_root
-#             for part in parts:
-#                 if part != '/':
-#                     folder_item = child_exists(old_parent, part)
-#                     if not folder_item:
-#                         folder_item = Chapter(old_parent, part)
-#                         old_parent.chapter_items.append(folder_item)
-#                     old_parent = folder_item
-#
-#             assert isinstance(folder_item, Chapter)
-#             if folder_item:
-#                 for code_item in code_items:
-#                     code_item.pack(self.color_filter)
-#                     item = CodeItem(folder_item, code_item.chapter_name, code_item.mode,
-#                                     code=code_item.code, compare_code=code_item.compare_code)
-#                     item.user_data = deepcopy(code_item.user_data)
-#                     CodeItem.unpack(item)
-#                     folder_item.code_items.append(item)
-#                     item.setCheckState(0, code_item.checkState(0))
-#                     item.set_color(code_item.color)
-#                 folder_item.set_gui(gui)
-#                 folder_item.set_color_based_on_children(gui)
-#
-#
-#         self.storage_list = temp_root.takeChildren()
-#
-#         return True
-#
-#     def remove_compare(self):
-#         """Method to remove compare code .
-#
-#         It resets the items as if still in the GUI_SELECT state.
-#         :return: None
-#         :rtype: None
-#         """
-#         for _, item in self.get_code_items():
-#             item.remove_compare()
+class TreeModel(QAbstractItemModel):
+    """
+    TreeModel implementation
+    """
+    selection_changed = pyqtSignal(TreeItem)
 
-#
-# class DependencyViewer(QWidget):
-#     """
-#     Dependency viewer: a window to investigate code objects that are dependent
-#     on the currently selected, right mouse clicked item in the selection tree view
-#     """
-#     def __init__(self, mode: int, code_item: CodeItem, pos: QPoint, parent=None):
-#         """
-#         Class Constructor
-#         :param mode: either GUI_SELECT or GUI_COMPARE
-#         :param code_item: the code item whose dependees are shown
-#         :param pos: pos of the window
-#         :param parent: parent object for this window
-#         """
-#
-#         def recurse(n_recurses, _mode: int, _code_item: CodeItem, _child: QTreeWidgetItem):
-#             """
-#
-#             :param n_recurses:
-#             :param _mode:
-#             :param _code_item:
-#             :param _child:
-#             :return:
-#             """
-#             n_recurses += 1
-#             if n_recurses > 100:
-#                 return
-#             _child.setText(0, _code_item.chapter_name[:-1] + ' : ' + _code_item.object_name)
-#             dependees = None
-#             if _mode & GUI_SELECT:
-#                 dependees = _code_item.dependees
-#             elif _mode & GUI_COMPARE:
-#                 dependees = _code_item.compare_dependees
-#             for _code_item1 in dependees:
-#                 _child1 = _code_item1.clone()
-#                 _child1.setText(0, _code_item1.chapter_name[:-1] + ' : ' + _code_item1.object_name)
-#                 _child.addChild(_child1)
-#                 recurse(n_recurses, _mode, _code_item1, _child1)
-#
-#         super(DependencyViewer, self).__init__(parent)
-#         # self.setGeometry(300, 400)
-#         self.resize(400, 400)
-#         self.move(pos)
-#         self.setMinimumSize(QSize(180, 240))
-#         if mode & GUI_SELECT:
-#             self.setWindowTitle('Depencency Viewer')
-#         elif mode & GUI_COMPARE:
-#             self.setWindowTitle('Depencency Viewer Compare Code')
-#
-#         self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-#         layout = QGridLayout(self)
-#
-#         root_node = code_item.clone()
-#         header = 'Dependencies on ' + code_item.object_name
-#         self.dependency_tree = VQLManagerWindow.create_tree_widget(self, QTreeWidget, ITEM_FLAG_SEL, header=header)
-#         scroll = QScrollArea()
-#         scroll.setWidget(self.dependency_tree)
-#         recurse(0, mode, code_item, root_node)
-#         children = root_node.takeChildren()
-#         if children:
-#             self.dependency_tree.addTopLevelItems(children)
-#         else:
-#             non_item = QTreeWidgetItem()
-#             non_item.setText(0, 'None')
-#             self.dependency_tree.addTopLevelItem(non_item)
-#
-#         # self.dependency_tree.addTopLevelItem(root_node)
-#         self.dependency_tree.expandAll()
-#         VQLManagerWindow.remove_checkboxes(self.dependency_tree)
-#         layout.addWidget(self.dependency_tree, 0, 0)
-#         self.setLayout(layout)
-#
-#     @staticmethod
-#     def get_viewer(mode: int, code_item: CodeItem, pos: QPoint, parent=None):
-#         """
-#         Returns the dependency viewer
-#         :param mode: the mode
-#         :param code_item: the code item whose depedees are shown
-#         :param pos: position of the code_item
-#         :param parent: parent
-#         :return: None
-#         """
-#         viewer = DependencyViewer(mode, code_item, pos, parent)
-#         result = viewer.show()
-#         return result
-#
+    def __init__(self, parent: QTreeView, mode: int, root_node: RootItem):
+        """
+
+        :param parent:
+        :param mode:
+        """
+        super(TreeModel, self).__init__(parent)
+        self.parent = parent
+        self.mode = mode
+        self.root_item = root_node
+        self.color_filter = None
+        self.type_filter = None
+
+    def flags(self, index: QModelIndex)->int:
+        """
+
+        :param index:
+        :return:
+        """
+        if index.isValid():
+            flags = super(TreeModel, self).flags(index)
+            flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsAutoTristate | Qt.ItemIsUserCheckable
+            return flags
+        else:
+            return Qt.NoItemFlags
+
+    # noinspection PyUnresolvedReferences
+    def setData(self, index: QModelIndex, new_data: Union[QVariant], role=None)->bool:
+        """
+        Puts changed data back into the base data
+        :param index:
+        :param new_data:
+        :param role:
+        :return:
+        """
+        if role == CHECK and index.column() == 0 and index.isValid():
+            item = self.item_for_index(index)
+            if item:
+                self.layoutAboutToBeChanged.emit()
+                if item.set_role_data(role, index.column(), new_data):
+                    self.selection_changed.emit(item)
+                    self.layoutChanged.emit()
+                    return True
+        self.layoutChanged.emit()
+        return False
+
+    def data(self, index: QModelIndex, role: int=None)->QVariant:
+        """Provider function for the model and view
+
+        :param index:
+        :param role:
+        :return:
+        """
+        if role in ROLES:
+            item = self.item_for_index(index)
+            data = item.get_role_data(role, index.column())
+        elif role == Qt.FontRole:
+            return QVariant(FONT)
+        else:
+            return NOTHING
+        return QVariant(data)
+
+    def headerData(self, section: int, orientation, role: int=None)->QVariant:
+        """
+        Called to supply the header
+        :param section:
+        :param orientation:
+        :param role:
+        :return:
+        """
+
+        if role in [DISPLAY, EDIT]:
+            if orientation == Qt.Horizontal:
+                if 0 <= section < len(self.root_item.column_data):
+                    return QVariant(self.root_item.column_data[section])
+        return NOTHING
+
+    def hasChildren(self, parent: QModelIndex=None, *args, **kwargs):
+        """
+        does it?
+        :param parent:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        if not parent.isValid():
+            return self.root_item.has_children()
+        if parent.column() > 0:
+            return False
+        parent_item = self.item_for_index(parent)
+        if parent_item:
+            return parent_item.has_children()
+        return False
+
+    def index(self, row: int, column: int, parent: Union[QModelIndex, None]=None, *args, **kwargs):
+        """generate an index for this item
+
+        :param row:
+        :param column:
+        :param parent:
+        :return:
+        """
+        if not parent:
+            parent = QModelIndex()
+
+        if not self.hasIndex(row, column, parent):
+            return QModelIndex()
+
+        parent_item = self.item_for_index(parent)
+        if parent_item.has_children() and 0 <= row < parent_item.child_count():
+            child = parent_item.child(row)
+            if 0 <= column < child.column_count():
+                index = self.createIndex(row, column, child)
+                return index
+        return QModelIndex()
+
+    def parent(self, index: Union[QModelIndex, None]=None):
+        """find the parent index"""
+        if not index.isValid():
+            return QModelIndex()
+
+        item = self.item_for_index(index)
+        parent_item = item.parent_item
+
+        if parent_item is self.root_item:
+            return QModelIndex()
+        else:
+            return self.createIndex(parent_item.child_number(), 0, parent_item)
+
+    def columnCount(self, parent: QModelIndex=None, *args, **kwargs)->int:
+        """how many columns does this node have?"""
+        if not parent.isValid():
+            return self.root_item.column_count()
+
+        parent_item = parent.internalPointer()
+        if parent_item.has_children():
+            child = parent_item.child(0)
+            return child.column_count()
+        else:
+            return 0
+
+    def rowCount(self, parent: QModelIndex=None, *args, **kwargs)->int:
+        """how many items?"""
+        if not parent.isValid():
+            return self.root_item.child_count()
+        if parent.column() > 0:
+            return 0
+        parent_item = parent.internalPointer()
+        return parent_item.child_count()
+
+    def item_for_index(self, index: QModelIndex)->Union[TreeItem, RootItem]:
+        """
+
+        :param index:
+        :return:
+        """
+        if index.isValid():
+            item = index.internalPointer()
+            if item:
+                return item
+        return self.root_item
+
+    def last_index(self):
+        """Index of the very last item in the tree.
+        """
+        current_index = QModelIndex()
+        row_count = self.rowCount(current_index)
+        while row_count > 0:
+            current_index = self.index(row_count - 1, 0, current_index)
+            row_count = self.row_count(current_index)
+        return current_index
+
+    def reset(self):
+        """
+        reset the model, roll up from the leaves and remove all reverences
+        :return:
+        """
+
+        self.beginResetModel()
+        self.resetInternalData()
+        header = str(self.root_item.header)
+        self.root_item.clear()
+        self.root_item.__init__(header)
+        self.endResetModel()
+
+    def remove_compare(self):
+        """
+        reset the model, roll up from the leaves and remove all reverences
+        :return:
+        """
+        self.beginResetModel()
+        self.root_item.remove_compare()
+        self.endResetModel()
+
+    def change_view(self, view: int)->bool:
+        """
+
+        :param view:
+        :return:
+        """
+        self.beginResetModel()
+        success = self.root_item.change_view(view)
+        self.endResetModel()
+        return success
+
 
 class VQLManagerWindow(QMainWindow):
     """
-    Main Gui Class.
+    Main Gui Class
     """
+
+    mode_changed = pyqtSignal(int)
+
     def __init__(self, parent=None):
         """
         Constructor of the Window Class
@@ -2892,13 +2904,34 @@ class VQLManagerWindow(QMainWindow):
         :type parent: Qt.Window
         :rtype: None
         """
-        logger.info("Start Window creation")
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
+        self.logger = LogWrapper("vql_manager")
+        self.logger.debug("Start Window creation")
         self.setAttribute(Qt.WA_DeleteOnClose)  # close children on exit
-        # root is the folder from which this file runs
+
+        # _root is the folder from which this file runs
         self._root = Path(QFileInfo(__file__).absolutePath())
-        images = self._root / 'images'
+        images = Path(QFileInfo(__file__).absolutePath()) / 'images'
+
+        self.icons = {
+            'I18N MAPS': self.get_pixmap('lang_map.png'),
+            'DATABASE': self.get_pixmap('database.png'),
+            'FOLDERS': self.get_pixmap('folder.png'),
+            'LISTENERS JMS': self.get_pixmap('listener.png'),
+            'DATASOURCES': self.get_pixmap('data_source.png'),
+            'WRAPPERS': self.get_pixmap('wrapper.png'),
+            'STORED PROCEDURES': self.get_pixmap('stored_procedure.png'),
+            'TYPES': self.get_pixmap('type_def.png'),
+            'MAPS': self.get_pixmap('key_value_map.png'),
+            'BASE VIEWS': self.get_pixmap('base_view.png'),
+            'VIEWS': self.get_pixmap('view.png'),
+            'ASSOCIATIONS': self.get_pixmap('association.png'),
+            'WEBSERVICES': self.get_pixmap('web_service.png'),
+            'WIDGETS': self.get_pixmap('web_container.png'),
+            'WEBCONTAINER WEB SERVICE DEPLOYMENTS': self.get_pixmap('web_container.png'),
+            'WEBCONTAINER WIDGET DEPLOYMENTS': self.get_pixmap('web_container.png')
+        }
 
         self.resize(1200, 800)
         self.setMinimumSize(QSize(860, 440))
@@ -2907,40 +2940,73 @@ class VQLManagerWindow(QMainWindow):
         self.setWindowTitle(APPLICATION_NAME)
 
         self.select_button_labels = {'All': white, 'Lost': red, 'New': green, 'Same': white, 'Changed': yellow}
-        self.diff_button_labels = {'Original': white, 'New': green, 'Changes': yellow}
+        self.diff_button_labels = {'Changes': yellow, 'Original': white, 'New': green}
 
         # instantiate widgets
-        self.mainwidget = QWidget(self, flags=Qt.Widget)
-        self.layout = QGridLayout(self.mainwidget)
+        self.main_widget = QWidget(self, flags=Qt.Widget)
+        self.main_layout = QGridLayout()
 
-        # create radio buttons
-        self.select_buttons, self.select_buttons_group = \
-            self.get_buttons_widget(self.mainwidget, self.select_button_labels)
-        self.diff_buttons, self.diff_buttons_group = \
-            self.get_buttons_widget(self.mainwidget, self.diff_button_labels)
+        self.main_splitter = QSplitter()
+        self.header_splitter = QSplitter()
+        self.content_splitter = QSplitter()
+        self.right_side_splitter = QSplitter()
+        self.tree_views_splitter = QSplitter()
+        self.log_splitter = QSplitter()
 
-        # create tree widgets VqlModel(self.mainwidget)
+        self.right_content_box = QVBoxLayout()
+        self.left_header_box = QVBoxLayout()
+        self.right_header_box = QVBoxLayout()
+        self.find_header_box = QHBoxLayout()
+        self.code_edit_box = QVBoxLayout()
+        self.treeview2_box = QVBoxLayout()
+        self.treeview3_box = QVBoxLayout()
+        self.log_box = QVBoxLayout()
+        self.info_box = QVBoxLayout()
 
-        self.all_chapters_treeview = self.create_tree_widget(self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER,
-                                                             header='Selection Pane',
-                                                             tooltip="")
+        self.right_content_widget = QWidget(self, flags=Qt.Widget)
+        self.left_header_widget = QWidget(self, flags=Qt.Widget)
+        self.right_header_widget = QWidget(self, flags=Qt.Widget)
+        self.code_edit_widget = QWidget(self, flags=Qt.Widget)
+        self.find_header_widget = QWidget(self, flags=Qt.Widget)
+        self.treeview2_widget = QWidget(self, flags=Qt.Widget)
+        self.treeview3_widget = QWidget(self, flags=Qt.Widget)
+        self.log_widget = QWidget(self, flags=Qt.Widget)
+        self.info_widget = QWidget(self, flags=Qt.Widget)
 
-        self.selected_treeview = self.create_tree_widget(self.mainwidget, QTreeWidget, ITEM_FLAG_SEL,
-                                                         header='View Pane',
-                                                         tooltip="Selected parts: Click to view source code")
+        self.item_info = QPlainTextEdit()
+        self.base_repository_label = QLabel()
+        self.compare_repository_label = QLabel()
+        self.search_label = QLabel()
+        self.find_line_edit = QLineEdit()
+        self.find_button = QPushButton()
+        self.log_edit = QPlainTextEdit()
 
-        # create labels
-        self.code_text_edit_label = QLabel(self.mainwidget)
-        self.mode_label = QLabel(self.mainwidget)
-        self.base_repository_label = QLabel(self.mainwidget)
-        self.compare_repository_label = QLabel(self.mainwidget)
-        self.selection_viewer_label = QLabel(self.mainwidget)
+        self.select_buttons, self.select_buttons_group = self.get_buttons_widget(self.select_button_labels)
+        self.diff_buttons, self.diff_buttons_group = self.get_buttons_widget(self.diff_button_labels)
+
+        self.icon_size = QSize(16, 16)
+        self.treeview1 = self.create_tree_view()
+        self.treeview2 = self.create_tree_view()
+        self.treeview3 = self.create_tree_view()
+
+        self.root_item = RootItem('Selection Pane')
+        self.tree_model = TreeModel(self.treeview1, LEFT | GUI_SELECT | SCRIPT_VIEW, self.root_item)
+        self.color_proxy_model = ColorProxyModel(self.treeview1, 'Selection Pane')
+        self.color_proxy_model.setSourceModel(self.tree_model)
+        self.treeview1.setModel(self.color_proxy_model)
+
+        self.proxy_model = SelectionProxyModel(self.treeview2, 'View Selection')
+        self.proxy_model.setSourceModel(self.tree_model)
+        self.treeview2.setModel(self.proxy_model)
+
+        self.dependency_model = DependencyModel(self.treeview3, 'Dependencies Pane')
+        self.treeview3.setModel(self.dependency_model)
 
         # create source code view
-        self.code_text_edit = QTextEdit(self.mainwidget)
+        self.code_text_edit = QTextEdit()
 
         # create statusbar
-        self.statusBar = QStatusBar(self)
+        self.status_bar = self.statusBar()
 
         #  Create Actions and Menubar ###############################################################################
         self.open_file_action = QAction(QIcon(str(images / 'open_file.png')), '&Open File', self)
@@ -2948,6 +3014,9 @@ class VQLManagerWindow(QMainWindow):
         self.export_file_action = QAction(QIcon(str(images / 'save_file.png')), 'Save As File', self)
         self.export_folder_action = QAction(QIcon(str(images / 'save_repo.png')), '&Save As Repository', self)
         self.exit_action = QAction(QIcon(str(images / 'exit.png')), '&Exit', self)
+
+        self.export_file_action.setEnabled(False)
+        self.export_folder_action.setEnabled(False)
 
         # Create recent file menu
         self.recent_file_actions = list()
@@ -2958,37 +3027,47 @@ class VQLManagerWindow(QMainWindow):
         for i in range(MAX_RECENT_FILES):
             action = QAction(self)
             action.setVisible(False)
+            # noinspection PyUnresolvedReferences
             action.triggered.connect(partial(self.on_open_recent_files, i, GUI_SELECT | BASE_FILE))
             self.recent_file_actions.append(action)
             action = QAction(self)
             action.setVisible(False)
+            # noinspection PyUnresolvedReferences
             action.triggered.connect(partial(self.on_open_recent_files, i, GUI_SELECT | BASE_REPO))
             self.recent_repository_actions.append(action)
             action = QAction(self)
             action.setVisible(False)
+            # noinspection PyUnresolvedReferences
             action.triggered.connect(partial(self.on_open_recent_files, i, GUI_COMPARE | COMP_FILE))
             self.compare_recent_file_actions.append(action)
             action = QAction(self)
             action.setVisible(False)
+            # noinspection PyUnresolvedReferences
             action.triggered.connect(partial(self.on_open_recent_files, i, GUI_COMPARE | COMP_REPO))
             self.compare_recent_repository_actions.append(action)
 
         # create compare with File menu
-        self.open_compare_file_action = \
-            QAction(QIcon(str(images / 'open_file.png')), '&Open File to Compare', self)
-        self.open_compare_folder_action = \
-            QAction(QIcon(str(images / 'open_repo.png')), 'Open &Repository to Compare', self)
-        self.denodo_folder_structure_action = \
-            QAction(QIcon(str(images / 'open_repo.png')), 'Denodo Folder Structure', self)
+        image = QIcon(str(images / 'open_file.png'))
+        self.open_compare_file_action = QAction(image, '&Open File to Compare', self)
+        image = QIcon(str(images / 'open_repo.png'))
+        self.open_compare_folder_action = QAction(image, 'Open &Repository to Compare', self)
+        image = QIcon(str(images / 'open_repo.png'))
+        self.denodo_folder_structure_action = QAction(image, 'Denodo Folder Structure', self)
+
+        self.open_compare_file_action.setEnabled(False)
+        self.open_compare_folder_action.setEnabled(False)
+        self.denodo_folder_structure_action.setEnabled(False)
 
         # Reset everything
+
+        self.reset_compare_action = QAction(QIcon(str(images / 'reset.png')), 'Remove &Comparison', self)
         self.reset_action = QAction(QIcon(str(images / 'reset.png')), 'Reset &Everything', self)
         # create about actions
         self.about_action = QAction("&About", self)
         self.about_qt_action = QAction("About &Qt", self)
 
         # Menu
-        self.menubar = QMenuBar(self)
+        self.menubar = self.menuBar()
         self.filemenu = QMenu()
         self.recent_file_separator = None
         self.recent_file_menu = QMenu()
@@ -3002,182 +3081,277 @@ class VQLManagerWindow(QMainWindow):
         self.compare_recent_file_separator = QMenu()
 
         self.help_menu = QMenu()
-
         self.options_menu = QMenu()
-        self.update_timer = QTimer()
-
-        self.all_chapters_treeview.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.all_chapters_treeview.customContextMenuRequested.connect(self.on_right_click)
 
         # Format and setup all widgets
         self.setup_ui()
 
         # Initialize class properties ###########################################################################
-        self.last_clicked_class_type = None
+        # self.last_clicked_class_type = None
         self.working_folder = None
         self.base_repository_file = None
         self.base_repository_folder = None
         self.compare_repository_file = None
         self.compare_repository_folder = None
-
         self._mode = 0
-
-        self.switch_to_mode(GUI_NONE)
         self.code_show_selector = ORIGINAL_CODE
         self.code_text_edit_cache = None
-        logger.info("Finished Window creation")
+
+        # setup state machine
+        self.state_machine = QStateMachine()
+        self.states = dict(init=QState(self.state_machine),
+                           base_loaded=QState(self.state_machine),
+                           compare_loaded=QState(self.state_machine))
+        self.setup_states()
+        self.state_machine.setInitialState(self.states['init'])
+        self.state_machine.start()
+        self.logger.debug("Finished Window creation")
 
     @staticmethod
-    def create_tree_widget(parent: QWidget, class_type, flags: int, header=None, tooltip=None)->Union[VqlModel, QTreeWidget]:
+    def get_pixmap(image_path):
+        """
+
+        :param image_path:
+        :return:
+        """
+        images = Path(QFileInfo(__file__).absolutePath()) / 'images'
+        return QVariant(QPixmap(str(images / image_path)).scaled(16, 16))
+
+    def get_mode(self)->int:
+        """
+        getter for mode
+        :return:
+        """
+        return self._mode
+
+    def set_mode(self, new_mode: int):
+        """
+        setter for mode
+        :param new_mode:
+        :return:
+        """
+        if not self._mode == new_mode:
+            self._mode = new_mode
+
+    def add_mode(self, mode: int):
+        """
+        add feature to mode
+        :param mode:
+        :return:
+        """
+        assert isinstance(mode, int)
+        if not self._mode & mode:
+            self._mode += mode
+
+    def sub_mode(self, mode: int):
+        """
+        subtract feature from mode
+        :param mode:
+        :return:
+        """
+        if self._mode & mode:
+            self._mode -= mode
+
+    def setup_states(self):
+        """
+
+        :return:
+        """
+        init = self.states['init']
+        base = self.states['base_loaded']
+        compare = self.states['compare_loaded']
+        
+        init.addTransition(TransOpenBase(self, init, base, self.mode_changed))
+        base.addTransition(TransResetBase(self, base, init, self.mode_changed))
+        base.addTransition(TransOpenCompare(self, base, compare, self.mode_changed))
+        compare.addTransition(TransRemoveCompare(self, compare,  base, self.mode_changed))
+        compare.addTransition(TransResetAll(self, compare, init, self.mode_changed))
+
+    def current_base_path_label(self):
+        """
+
+        :return:
+        """
+        label = ''
+        if self.base_repository_file:
+            label = 'File: '
+        if self.base_repository_folder:
+            label = 'Folder: '
+        if self.base_repository_file or self.base_repository_folder:
+            label += self.base_repository_file if self.base_repository_file else self.base_repository_folder
+        return label
+
+    def current_compare_path_label(self):
+        """
+
+        :return:
+        """
+        label = ''
+        if self.compare_repository_file:
+            label = 'File: '
+        if self.compare_repository_folder:
+            label = 'Folder: '
+
+        if self.compare_repository_file or self.compare_repository_folder:
+            label += self.compare_repository_file if self.compare_repository_file else self.compare_repository_folder
+        return label
+
+    @staticmethod
+    def create_tree_view(tooltip: str='')->Union[QTreeView]:
         """Factory for instances of a QTreeWidget or VqlModel
 
-        :param parent: The parent of the widget, in which it is placed
-        :type parent: QWidget
-        :param class_type: Either a QTreeWidget or an inherited VqlModel
-        :type class_type: class
-        :param flags: the flags on the QTreeWidget
-        :type flags: int
-        :param header: The header of the widget
-        :type header: str
         :param tooltip: Initial tooltip
         :type tooltip: str
         :return: the TreeWidget created
-        :rtype: VqlModel or QTreeWidget
+        :rtype: QTreeView
         """
-        tree_widget = class_type(parent)
-        tree_widget.invisibleRootItem().setFlags(flags)
-        tree_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        tree_widget.setSelectionMode(QAbstractItemView.NoSelection)
-        tree_widget.setUniformRowHeights(True)
-        if header:
-            tree_widget.setHeaderLabel(header)
+        icon_size = QSize(16, 16)
+        tree_view = QTreeView()
+        tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tree_view.setSelectionMode(QAbstractItemView.NoSelection)
+        tree_view.setSelectionBehavior(QAbstractItemView.SelectItems)
+        tree_view.setEnabled(True)
+        tree_view.setItemsExpandable(True)
+        tree_view.setSortingEnabled(False)
+        tree_view.setRootIsDecorated(True)
+        tree_view.setIconSize(icon_size)
+        tree_view.setUniformRowHeights(True)
+        tree_view.setAnimated(True)
+
+        header = tree_view.header()
+        header.setStretchLastSection(False)
+        header.setResizeContentsPrecision(0)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+
+        tree_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
         if tooltip:
-            tree_widget.setToolTip(tooltip)
-        tree_widget.setToolTipDuration(2000)
-        tree_widget.setColumnCount(1)
-        return tree_widget
+            tree_view.setToolTip(tooltip)
+            tree_view.setToolTipDuration(2000)
+        return tree_view
 
-    def new_tree_data(self, mode: int)->int:
-        """Function resets the data in the trees so the are new and shiny.
-
-        :param mode: Flags
-        :type mode: int
-        :return: the new mode
-        :rtype: int
-        """
-
-        new_mode = GUI_NONE
-        if mode & GUI_NONE:
-            self.all_chapters_treeview.clear()
-            self.selected_treeview.clear()
-            self.all_chapters_treeview = self.create_tree_widget(
-                self.mainwidget, VqlModel, ITEM_FLAG_CHAPTER, header='Selection Pane', tooltip="")
-
-            self.selected_treeview = self.create_tree_widget(
-                self.mainwidget, QTreeWidget, ITEM_FLAG_SEL, header='View Pane',
-                tooltip="Selected parts: Click to view source code")
-            new_mode = GUI_NONE
-
-        elif mode & GUI_SELECT:
-            self.all_chapters_treeview.remove_compare()
-            strip_list = [GUI_COMPARE, COMP_REPO, COMP_FILE, COMP_LOADED]
-            new_mode = self.mode_strip(self.get_mode(), strip_list)
-        return new_mode
-
-    @staticmethod
-    def mode_strip(mode: int, strip_list: List[int])->int:
-        """Removes flags in the strip_list from the mode flag.
-
-        Normally this is done with mode = mode & ~flag , but since python has not unsigned integers we use subtract
-        :param mode: the mode flags
-        :type mode: int
-        :param strip_list: the flag to remove
-        :type strip_list: list(int)
-        :return: an new mode without stripped flags
-        :rtype: int
-        """
-        for constant in strip_list:
-            if mode & constant:
-                mode -= constant
-        return mode
-
-    @staticmethod
-    def resize_widget(some_widget: QWidget):
-        """Sets size policy on the widget
-
-        :param some_widget: a widget
-        :type some_widget: QWidget
-        :return: None
-        :rtype: None
-        """
-        some_widget.setMinimumSize(QSize(PANE_WIDTH, 0))
-        some_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
+    # noinspection PyUnresolvedReferences
     def setup_ui(self):
         """Function setup up all widgets
 
         :return: None
         :rtype: None
         """
-        logger.debug("Start setup window ui")
-        self.layout.setContentsMargins(23, 23, 23, 23)
-        self.layout.setSpacing(8)
+        self.logger.debug("Start setup window ui")
 
-        # Add Widgets ####################################################################################
-
-        self.resize_widget(self.all_chapters_treeview)
-        self.resize_widget(self.selected_treeview)
-        self.resize_widget(self.code_text_edit_label)
-        self.resize_widget(self.mode_label)
-        self.resize_widget(self.selection_viewer_label)
-        self.resize_widget(self.compare_repository_label)
-        self.resize_widget(self.base_repository_label)
-        self.resize_widget(self.code_text_edit)
-        self.resize_widget(self.select_buttons)
-        self.resize_widget(self.diff_buttons)
+        # Configure Widgets ####################################################################################
+        self.search_label.setText('Search')
+        self.find_button.setText('Find')
 
         self.select_buttons.setHidden(True)
         self.diff_buttons.setHidden(True)
+
         self.code_text_edit.setLineWrapMode(0)
         self.code_text_edit.setReadOnly(True)
-        self.code_text_edit.setText("non selected")
-        self.code_text_edit_label.setText("Command:")
+        self.code_text_edit.setText("")
+        self.log_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.log_edit.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        self.log_edit.setMaximumBlockCount(1000)
+        self.item_info.setPlainText("")
+
+        self.status_bar.setMinimumSize(QSize(0, 20))
+        self.status_bar.showMessage("Ready")
 
         #  Layout ################################################################################
-        # left pane
-        self.layout.addWidget(self.mode_label,                0, 0, 1, 2)
-        self.layout.addWidget(self.base_repository_label,     1, 0, 1, 2)
-        self.layout.addWidget(self.compare_repository_label,  2, 0, 1, 2)
-        self.layout.addWidget(self.select_buttons,            3, 0, 1, 1)
-        self.layout.addWidget(self.all_chapters_treeview,     4, 0, 4, 1)
 
-        # right pane
+        self.main_splitter.setOrientation(Qt.Vertical)
+        self.header_splitter.setOrientation(Qt.Horizontal)
+        self.content_splitter.setOrientation(Qt.Horizontal)
+        self.right_side_splitter.setOrientation(Qt.Vertical)
+        self.tree_views_splitter.setOrientation(Qt.Horizontal)
+        self.log_splitter.setOrientation(Qt.Horizontal)
 
-        self.layout.addWidget(self.selection_viewer_label,  3, 1, 1, 1)
-        self.layout.addWidget(self.selected_treeview,       4, 1, 1, 1)
-        self.layout.addWidget(self.code_text_edit_label, 5, 1, 1, 1)
-        self.layout.addWidget(self.diff_buttons,            6, 1, 1, 1)
-        self.layout.addWidget(self.code_text_edit, 7, 1, 1, 1)
+        self.right_content_widget.setLayout(self.right_content_box)
+        self.left_header_widget.setLayout(self.left_header_box)
+        self.right_header_widget.setLayout(self.right_header_box)
+        self.code_edit_widget.setLayout(self.code_edit_box)
+        self.find_header_widget.setLayout(self.find_header_box)
+        self.treeview2_widget.setLayout(self.treeview2_box)
+        self.treeview3_widget.setLayout(self.treeview3_box)
+        self.log_widget.setLayout(self.log_box)
+        self.info_widget.setLayout(self.info_box)
 
-        self.layout.setRowStretch(0, 1)
-        self.layout.setRowStretch(1, 1)
-        self.layout.setRowStretch(2, 1)
-        self.layout.setRowStretch(3, 1)
+        # noinspection PyArgumentList
+        self.log_box.addWidget(self.log_edit)
+        # noinspection PyArgumentList
+        self.info_box.addWidget(self.item_info)
 
-        self.layout.setRowStretch(4, 12)
-        self.layout.setRowStretch(5, 1)
-        self.layout.setRowStretch(6, 1)
-        self.layout.setRowStretch(7, 12)
+        self.log_splitter.addWidget(self.log_widget)
+        self.log_splitter.addWidget(self.info_widget)
 
-        self.layout.setColumnStretch(0, 1)
-        self.layout.setColumnStretch(1, 2)
+        # noinspection PyArgumentList
+        self.right_content_box.addWidget(self.treeview1)
+        # noinspection PyArgumentList
+        self.right_content_box.addWidget(self.select_buttons)
 
-        self.statusBar.setMinimumSize(QSize(0, 20))
-        self.statusBar.showMessage("Ready")
-        self.setStatusBar(self.statusBar)
+        # noinspection PyArgumentList
+        self.treeview2_box.addWidget(self.treeview2)
+
+        # noinspection PyArgumentList
+        self.treeview3_box.addWidget(self.treeview3)
+
+        # noinspection PyArgumentList
+        self.find_header_box.addWidget(self.search_label)
+        # noinspection PyArgumentList
+        self.find_header_box.addWidget(self.find_line_edit)
+        # noinspection PyArgumentList
+        self.find_header_box.addWidget(self.find_button)
+
+        # noinspection PyArgumentList
+        # self.left_header_box.addWidget(self.mode_label)
+        # noinspection PyArgumentList
+        self.left_header_box.addWidget(self.base_repository_label)
+        # noinspection PyArgumentList
+        self.left_header_box.addWidget(self.compare_repository_label)
+
+        # noinspection PyArgumentList
+        self.right_header_box.addWidget(self.find_header_widget)
+
+        # noinspection PyArgumentList
+        self.code_edit_box.addWidget(self.code_text_edit)
+        # noinspection PyArgumentList
+        self.code_edit_box.addWidget(self.diff_buttons)
+
+        # noinspection PyArgumentList
+        self.header_splitter.addWidget(self.left_header_widget)
+        # noinspection PyArgumentList
+        self.header_splitter.addWidget(self.right_header_widget)
+
+        self.tree_views_splitter.addWidget(self.treeview3_widget)
+        self.tree_views_splitter.addWidget(self.treeview2_widget)
+        self.right_side_splitter.addWidget(self.tree_views_splitter)
+        self.right_side_splitter.addWidget(self.code_edit_widget)
+
+        self.content_splitter.addWidget(self.right_content_widget)
+        self.content_splitter.addWidget(self.right_side_splitter)
+
+        self.main_splitter.addWidget(self.header_splitter)
+        self.main_splitter.addWidget(self.content_splitter)
+        self.main_splitter.addWidget(self.log_splitter)
+
+        self.main_splitter.setStretchFactor(1, 1)
+        self.log_splitter.setStretchFactor(0, 0.5)
+        self.main_splitter.setSizes([50, 800, 100])
+        self.log_splitter.setSizes([500, 200])
+        self.header_splitter.setSizes([300, 300])
+
+        self.header_splitter.setHandleWidth(0)
+        self.main_splitter.setHandleWidth(0)
+        self.content_splitter.setHandleWidth(0)
+        self.tree_views_splitter.setHandleWidth(0)
+        self.right_side_splitter.setHandleWidth(0)
+        self.log_splitter.setHandleWidth(0)
+
+        self.main_widget.setLayout(self.main_layout)
+        self.main_layout.addWidget(self.main_splitter)
 
         # Parent mainWidget to the QMainWindow
-        self.setCentralWidget(self.mainwidget)
+        self.setCentralWidget(self.main_widget)
 
         #  Actions and Menubar ###############################################################################
         # Open File
@@ -3223,6 +3397,9 @@ class VQLManagerWindow(QMainWindow):
         self.reset_action.setStatusTip('Reset the application to a clean state')
         self.reset_action.triggered.connect(self.on_reset)
 
+        self.reset_compare_action.setStatusTip('Remove comparison')
+        self.reset_compare_action.triggered.connect(self.on_remove_comparison)
+
         self.about_action.setStatusTip("Show the application's About box")
         self.about_action.triggered.connect(self.on_about_vql_manager)
         self.about_qt_action.setStatusTip("Show the Qt library's About box")
@@ -3239,13 +3416,13 @@ class VQLManagerWindow(QMainWindow):
 
         self.recent_file_separator = self.filemenu.addSeparator()
         self.recent_file_menu = self.filemenu.addMenu('Recent Files')
-        for i in range(MAX_RECENT_FILES):
-            self.recent_file_menu.addAction(self.recent_file_actions[i])
+        for action in self.recent_file_actions:
+            self.recent_file_menu.addAction(action)
 
         self.recent_repository_separator = self.filemenu.addSeparator()
         self.recent_repository_menu = self.filemenu.addMenu('Recent Repositories')
-        for i in range(MAX_RECENT_FILES):
-            self.recent_repository_menu.addAction(self.recent_repository_actions[i])
+        for action in self.recent_repository_actions:
+            self.recent_repository_menu.addAction(action)
 
         self.filemenu.addSeparator()
         self.filemenu.addAction(self.exit_action)
@@ -3256,19 +3433,25 @@ class VQLManagerWindow(QMainWindow):
 
         self.compare_recent_file_separator = self.compare_menu.addSeparator()
         self.compare_recent_file_menu = self.compare_menu.addMenu('Recent Files')
-        for i in range(MAX_RECENT_FILES):
-            self.compare_recent_file_menu.addAction(self.compare_recent_file_actions[i])
+        for action in self.compare_recent_file_actions:
+            self.compare_recent_file_menu.addAction(action)
 
         self.compare_recent_repository_separator = self.compare_menu.addSeparator()
         self.compare_recent_repository_menu = self.compare_menu.addMenu('Recent Repositories')
-        for i in range(MAX_RECENT_FILES):
-            self.compare_recent_repository_menu.addAction(self.compare_recent_repository_actions[i])
+
+        for action in self.compare_recent_repository_actions:
+            self.compare_recent_repository_menu.addAction(action)
+
+        self.compare_recent_repository_menu.setEnabled(False)
+        self.compare_recent_file_menu.setEnabled(False)
+        self.reset_compare_action.setEnabled(False)
 
         self.update_recent_file_actions()
 
         self.options_menu = self.menubar.addMenu('&Options')
         self.options_menu.addAction(self.denodo_folder_structure_action)
         self.options_menu.addSeparator()
+        self.options_menu.addAction(self.reset_compare_action)
         self.options_menu.addAction(self.reset_action)
 
         self.help_menu = self.menubar.addMenu('&Help')
@@ -3276,17 +3459,29 @@ class VQLManagerWindow(QMainWindow):
         self.help_menu.addAction(self.about_qt_action)
 
         # Callbacks Slots and Signals #####################################################
-        self.all_chapters_treeview.itemClicked.connect(self.on_selection_clicked)
-        self.all_chapters_treeview.itemChanged.connect(self.on_selection_changed)
-        self.selected_treeview.itemClicked.connect(self.on_click_item_selected)
+        self.treeview1.expanded.connect(self.on_expand_treeview)
+        self.treeview1.collapsed.connect(self.on_collapse_treeview)
+        self.treeview1.clicked.connect(self.on_click_item_selected)
+        self.treeview2.clicked.connect(self.on_click_item_selected)
+        self.treeview3.clicked.connect(self.on_click_item_selected)
+        self.tree_model.selection_changed.connect(self.on_selection_changed)
+        self.tree_model.dataChanged.connect(self.on_selection_changed)
+        self.find_button.released.connect(self.on_find_button_click)
+        self.find_line_edit.returnPressed.connect(self.on_find_button_click)
+        self.logger.custom_signal.connect(self.on_log_message)
 
         # Radio buttons
         self.select_buttons_group.buttonClicked.connect(self.on_select_buttons_clicked)
         self.diff_buttons_group.buttonClicked.connect(self.on_diff_buttons_clicked)
+        self.logger.debug("Finished setup window ui")
 
-        # connect update timer
-        self.update_timer.timeout.connect(self.update_tree_widgets)
-        logger.debug("Finished setup window ui")
+    def on_log_message(self, msg):
+        """
+
+        :param msg:
+        :return:
+        """
+        self.log_edit.appendPlainText(msg)
 
     def update_recent_file_actions(self):
         """Upates the Action objects in the menu to reflect the recent file storage.
@@ -3341,35 +3536,18 @@ class VQLManagerWindow(QMainWindow):
             self.recent_repository_separator.setVisible(False)
             self.compare_recent_repository_separator.setVisible(False)
 
-    def get_all_dependees(self, item: CodeItem, items=list())->List[CodeItem]:
-        """Recursive function to gather all the items that are dependent on this one.
-
-        :param item: a CodeItem object
-        :type item: CodeItem
-        :param items: the list of dependees
-        :type items: list(CodeItems)
-        :return: the list of dependees
-        :rtype: list(CodeItems)
-        """
-        for item in item.dependees:
-            items.append(item)
-            self.get_all_dependees(item, items)
-        else:
-            return items
-
     @staticmethod
-    def get_buttons_widget(main_widget: QWidget, button_dict: dict)->Tuple[QWidget, QButtonGroup]:
+    def get_buttons_widget(button_dict: dict)->Tuple[QWidget, QButtonGroup]:
         """Constructs a series of related radio buttons used to filter CodeItems.
 
-        :param main_widget: the parent widget
-        :type main_widget: QWidget
         :param button_dict: A dict with names and colors
         :type button_dict: dict
         :return: A tuple of widget and the group its in
-        :rtype: tuple(Qwidget, QWidgetGroup)
+        :rtype: Tuple[QWidget, QButtonGroup]
         """
         layout = QHBoxLayout()  # layout for the central widget
-        widget = QWidget(main_widget)  # central widget
+        # noinspection PyArgumentList
+        widget = QWidget()  # central widget
         widget.setLayout(layout)
         group = QButtonGroup(widget)  # Number group
         first_button = True
@@ -3380,58 +3558,29 @@ class VQLManagerWindow(QMainWindow):
                 btn.setChecked(True)
                 first_button = False
             group.addButton(btn)
+            # noinspection PyArgumentEqualDefault
             layout.addWidget(btn, 0, Qt.AlignLeft)
         return widget, group
 
-    def get_mode(self)->int:
-        """Getter for the mode flag
+    # Event handlers
 
-        :return: the current mode
-        :rtype: int
+    def on_expand_treeview(self, index):
         """
-        return self._mode
 
-    def switch_to_mode(self, new_mode: int):
-        """Redresses the window to reflect the new mode
-        :param new_mode: the new mode
-        :return: None
-        :rtype: None
+        :param index:
+        :return:
         """
-        logger.debug("Starting setting mode: " + show_mode(new_mode))
-        if new_mode & GUI_NONE or new_mode == 0:
-            self.mode_label.setText('View Mode: None')
-            self.base_repository_label.setText('No file loaded')
-            self.compare_repository_label.setText('')
-            self.all_chapters_treeview.setHeaderLabel('Selection Pane')
-        elif new_mode & GUI_SELECT:
-            self.mode_label.setText("View Mode: Selection")
-            self.diff_buttons.setHidden(True)
-            self.select_buttons.setHidden(True)
-            if new_mode & BASE_LOADED:
-                if new_mode & BASE_FILE:
-                    self.base_repository_label.setText('File : ' + str(self.base_repository_file))
-                elif new_mode & BASE_REPO:
-                    self.base_repository_label.setText('Repository : ' + str(self.base_repository_folder))
-            self.compare_repository_label.setText('')
-        elif new_mode & GUI_COMPARE:
-            self.mode_label.setText("View Mode: Compare")
-            self.diff_buttons.setHidden(False)
-            self.select_buttons.setHidden(False)
-            if new_mode & COMP_LOADED:
-                if new_mode & COMP_FILE:
-                    self.compare_repository_label.setText('File : ' + str(self.compare_repository_file))
-                elif new_mode & COMP_REPO:
-                    self.compare_repository_label.setText('Repository : ' + str(self.compare_repository_folder))
-        if new_mode & VQL_VIEW:
-            self.denodo_folder_structure_action.setChecked(False)
-            self.on_switch_view()
+        idx = self.color_proxy_model.mapToSource(index)
+        self.treeview2.expand(self.proxy_model.mapFromSource(idx))
 
-        self.all_chapters_treeview.switch_mode(new_mode)
-        self._mode = new_mode
-        # self.statusBar.showMessage(show_mode(self._mode))
-        logger.debug("Finished setting mode: " + show_mode(self._mode))
+    def on_collapse_treeview(self, index):
+        """
 
-    # Event handlers for opening and saving models
+        :param index:
+        :return:
+        """
+        idx = self.color_proxy_model.mapToSource(index)
+        self.treeview2.collapse(self.proxy_model.mapFromSource(idx))
 
     def on_open_recent_files(self, index: int, mode: int):
         """Event handler for the click on a recent files menu item.
@@ -3474,8 +3623,28 @@ class VQLManagerWindow(QMainWindow):
             color = ''
         else:
             color = self.select_button_labels[button.text()]
-        self.all_chapters_treeview.color_filter = color
-        self.update_tree_widgets()
+        self.color_proxy_model.set_color_filter(color, CodeItem)
+
+    def on_find_button_click(self):
+        """
+        Event handler of the find button
+        :return:
+        """
+        mode = self.get_mode()
+        if mode & BASE_LOADED or mode & COMP_LOADED:
+            what = self.find_line_edit.text().strip()
+            if what:
+                model = self.tree_model
+                items = model.match(model.index(0, 0), DISPLAY,  QVariant(what), -1,
+                                    Qt.MatchRecursive | Qt.MatchStartsWith)
+                if items:
+                    item = items[0]
+                    self.treeview1.setCurrentIndex(self.color_proxy_model.mapFromSource(item))
+                    self.treeview1.setFocus()
+                    self.status_bar.showMessage(f"Found {str(len(items))} occurrences. The first shown")
+                else:
+                    self.treeview1.setFocus()
+                    self.status_bar.showMessage(f"The term: {what} was not found")
 
     def on_diff_buttons_clicked(self, button: QRadioButton):
         """Event handler for the radio buttons in the right pane.
@@ -3507,11 +3676,11 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-        logger.info(f"Open file or repository {load_path if load_path else ''} in mode: {show_mode(new_mode)} mode.")
+
         file = None
         folder = None
-
         if load_path:
+            self.logger.info(f"Open file or repository {load_path} in mode: {show_mode(new_mode)} mode.")
             if new_mode & FILE:
                     file = Path(load_path)
             elif new_mode & REPO:
@@ -3519,83 +3688,70 @@ class VQLManagerWindow(QMainWindow):
             else:
                 return
 
-        current_mode = self.get_mode()
-
         if new_mode & GUI_SELECT:
-            if current_mode & (BASE_LOADED | COMP_LOADED):
+            if self.states['base_loaded'] in self.state_machine.configuration():
                 # some base model is open:
                 if self.ask_drop_changes():
-                    self.switch_to_mode(self.new_tree_data(GUI_NONE))
-                    self.on_open(new_mode)  # recurse to the begin
+                    self.add_mode(BASE_UNLOAD)
+                    self.mode_changed.emit(self.get_mode())
+                    if load_path:
+                        self.on_open(self.get_mode() | new_mode, load_path)  # recurse to the begin
+                    else:
+                        self.on_open(self.get_mode() | new_mode)  # recurse to the begin
                 else:
                     return
-            else:  # ok we can load
+            elif self.states['init'] in self.state_machine.configuration():
                 if new_mode & BASE_FILE:
                     if not file:
                         file = self.ask_file_open()
                     if file:
-                        self.run(self.load_model_from_file(file, BASE_FILE | GUI_SELECT))
+                        self.base_repository_file = file
+                        self.add_mode(BASE_FILE)
+                        self.mode_changed.emit(self.get_mode())
+                        self.add_mode(GUI_SELECT)
+                        return
                 elif new_mode & BASE_REPO:
                     if not folder:
                         folder = self.ask_repository_open()
                     if folder:
-                        self.run(self.load_model_from_repository(folder, BASE_REPO | GUI_SELECT))
-
+                        self.base_repository_folder = folder
+                        self.add_mode(BASE_REPO)
+                        self.mode_changed.emit(self.get_mode())
+                        self.add_mode(GUI_SELECT)
+                        return
         elif new_mode & GUI_COMPARE:
-            if not current_mode & BASE_LOADED:  # there is a base model
-                message_to_user("No repository loaded yet", parent=self)
-                return
-
-            if current_mode & COMP_LOADED:  # there is a compare going on
+            if self.states['compare_loaded'] in self.state_machine.configuration():
                 if self.ask_drop_changes():
-                    self.switch_to_mode(self.new_tree_data(GUI_SELECT))
-                    self.on_open(new_mode)  # recurse to the begin
+                    self.add_mode(COMP_UNLOAD)
+                    self.mode_changed.emit(self.get_mode())
+                    if load_path:
+                        self.on_open(self.get_mode() | new_mode, load_path)  # recurse to the begin
+                    else:
+                        self.on_open(self.get_mode() | new_mode)  # recurse to the begin
                 else:
                     return
-            else:  # ok we can load
+            elif self.states['base_loaded'] in self.state_machine.configuration():
                 if new_mode & COMP_FILE:
                     if not file:
                         file = self.ask_file_open()
                     if file:
-                        self.run(self.load_model_from_file(file, COMP_FILE | GUI_COMPARE))
+                        self.compare_repository_file = file
+                        self.add_mode(COMP_FILE)
+                        self.mode_changed.emit(self.get_mode())
+                        self.add_mode(GUI_COMPARE)
+                        return
                 elif new_mode & COMP_REPO:
                     if not folder:
                         folder = self.ask_repository_open()
                     if folder:
-                        self.run(self.load_model_from_repository(folder, COMP_REPO | GUI_COMPARE))
-        logger.info("File or repository loaded.")
-
-    def on_right_click(self, pos: QPoint):
-        """Event handler for the right click event on the all_chapter_treeview widget.
-
-        :param pos: position of the click
-        :return: None
-        :rtype: None
-        """
-        if pos:
-            item = self.all_chapters_treeview.itemAt(pos)
-            if item.class_type == CodeItem:
-                if self._mode & GUI_SELECT:
-                    DependencyViewer.get_viewer(self._mode, item, pos, self)
-                elif self._mode & GUI_COMPARE:
-                    if item.compare_code:
-                        DependencyViewer.get_viewer(self._mode, item, pos, self)
-                    else:
-                        message_to_user('This item does not exist in the new (compare) code base', parent=self)
-
-    @staticmethod
-    def run(task):
-        """Function to start asynchronous tasks.
-
-        :param task: A future function to be ran
-        :return: None
-        :rtype: None
-        """
-
-        if task:
-            loop = asyncio.new_event_loop()
-            loop.run_until_complete(task)
-            loop.close()
+                        self.compare_repository_folder = folder
+                        self.add_mode(COMP_REPO)
+                        self.mode_changed.emit(self.get_mode())
+                        self.add_mode(GUI_COMPARE)
+                        return
+            else:
+                message_to_user("No repository loaded yet", parent=self)
+        self.logger.info("File or repository loaded.")
 
     def on_save(self, save_mode: int):
         """Event handler for the Save to File or Save to Repository menu items.
@@ -3606,7 +3762,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-        logger.info(f"Saving file or repository in {show_mode(save_mode)} mode.")
+        self.logger.info(f"Saving file or repository in {show_mode(save_mode)} mode.")
         current_mode = self.get_mode()
         if not current_mode & BASE_LOADED:
             message_to_user("No repository loaded yet", parent=self)
@@ -3615,117 +3771,216 @@ class VQLManagerWindow(QMainWindow):
         if save_mode & FILE:
             file = self.ask_file_save()
             if file:
-                self.run(self.save_model_to_file(file))
-                logger.info(f"{file} saved.")
+                self.save_model_to_file(file)
+                self.logger.info(f"{file} saved.")
         elif save_mode & REPO:
             folder = self.ask_repository_save()
             if folder:
-                self.run(self.save_model_to_repository(folder))
-                logger.info(f"{folder} saved.")
+                self.save_model_to_repository(folder)
+                self.logger.info(f"{folder} saved.")
 
     def on_reset(self):
-        """Event handler to reset everything.
+        """Event handler to reset everything"""
 
-        This function actually restarts the whole application in a new process.
-        Also the recent files and repositories are reset.
-
-        :return: None
-        :rtype: None
-        """
-        logger.info('Application restart.')
-        settings = QSettings(COMPANY, APPLICATION_NAME)
-        settings.clear()
-
-        app_path = self._root / 'vql_manager.py'
-        try:
-            subprocess.Popen([sys.executable, str(app_path)])
-        except OSError as exception:
-            error_message_box('Restart Error', 'ERROR: could not restart application:', str(exception), parent=self)
+        if self.states['base_loaded'] in self.state_machine.configuration():
+            self.logger.info('Application reset.')
+            self.add_mode(BASE_UNLOAD)
+            self.mode_changed.emit(self.get_mode())
+        elif self.states['compare_loaded'] in self.state_machine.configuration():
+            self.logger.info('Application reset.')
+            self.add_mode(BASE_UNLOAD)
+            self.add_mode(COMP_UNLOAD)
+            self.mode_changed.emit(self.get_mode())
         else:
-            qApp.quit()
+            self.logger.info('Application is already in initial state')
 
-    def on_selection_clicked(self, item: Union[Chapter, CodeItem], *_):
-        """Event handler for changes of the selection (check boxes) in the all_chapters_treeview (VqlModel).
+    def on_remove_comparison(self):
+        """Event handler to remove the comparison."""
 
-        :param item: The item that changed in the all_chapters_treeview
-        :type item: QTreeWidgetItem
-        :param _: not used
-        :return: None
-        :rtype: None
+        if self.states['compare_loaded'] in self.state_machine.configuration():
+            self.logger.info('Removing Compare.')
+            self.add_mode(COMP_UNLOAD)
+            self.mode_changed.emit(self.get_mode())
+        else:
+            self.logger.info('No comparison found')
+
+    def on_click_item_selected(self, item_index: QModelIndex):
         """
-        self.last_clicked_class_type = item.class_type
 
-    def on_selection_changed(self, item: Union[Chapter, CodeItem], *_):
-        """Event handler for changes of the selection (check boxes) in the all_chapters_treeview (VqlModel).
-
-        :param item: The item that changed in the all_chapters_treeview
-        :type item: QTreeWidgetItem
-        :param _: not used
-        :return: None
-        :rtype: None
+        :param item_index:
+        :return:
         """
-        def sel(_item: Union[Chapter, CodeItem])->bool:
-            """
-            if an item is selected
-            :param _item: the item
-            :return:
-            """
-            return False if _item.checkState(0) == UNCHECKED else True
+        if not item_index:
+            self.dependency_model.set_root_code_item(None)
+            self.code_text_edit_cache = None
+            self.item_info.setPlainText('')
+            self.code_text_edit.setText('')
+            return
 
-        logger.debug('Item clicked on Selection Pane: ' + item.text(0))
-        mode = self.get_mode()
+        if not item_index.isValid():
+            return
 
-        if mode & GUI_SELECT:
-            if self.last_clicked_class_type == CodeItem:
-                if item.class_type == CodeItem:
-                    if not sel(item):
-                        if any([sel(dependee) for dependee in item.dependees]):
-                            message_to_user('This item has other items that are dependent on it.', parent=self)
-
-        elif mode & GUI_COMPARE:
-            if self.last_clicked_class_type == CodeItem:
-                if item.class_type == CodeItem:
-                    if sel(item):
-                        if not item.compare_code:
-                            item.compare_code = item.code
-                            items = {code_item.object_name for code_item in item.dependencies}
-                            dependencies_not_met = [item for item in items if not item.compare_code or not sel(item)]
-                            if any(dependencies_not_met):
-                                msg = 'This item has dependencies not met. '
-                                message_to_user(msg + 'Check these: ' + '; '.join(dependencies_not_met), parent=self)
-                else:
-                    if item.class_type == CodeItem:
-                        dependees_orphaned = [sel(dependee) for dependee in item.compare_dependees]
-                        if any(dependees_orphaned):
-                            msg = 'This item has other items that are dependent on it. '
-                            message_to_user(msg + 'Check these: ' + '; '.join(dependees_orphaned), parent=self)
-
-        self.all_chapters_treeview.changed = True
-        self.update_timer.start(100)
-
-    def on_click_item_selected(self, item: QTreeWidgetItem, col: int):
-        """Event handler for looking up code in the View Pane (code item clicked).
-
-        :param item: The CodeItem clicked on the Selection Tree
-        :type item: QTreeWidgetItem
-        :param col: The column --always zero, we only use 1 column in tree widgets
-        :type col: int
-        :return: None
-        :rtype: None
-        """
+        if item_index.model() is self.dependency_model:
+            item = item_index.internalPointer().code_item
+        else:
+            item = item_index.model().mapToSource(item_index).internalPointer()
 
         if item:
-            item_data = item.data(col, Qt.UserRole)
-            if item_data['class_type'] == CodeItem:
-                logger.debug('CodeItem clicked on View Pane: ' + item.text(0))
-                cache = dict()
-                cache['object_name'] = item_data['object_name']
-                cache['code'] = item_data['code']
-                cache['compare_code'] = item_data['compare_code']
-                self.code_text_edit_cache = cache
-                self.show_code_text()
-            else:
-                self.code_text_edit_cache = None
+            self.show_item_data(item)
+
+    def show_item_data(self, item):
+        """
+
+        :return:
+        """
+        if isinstance(item, CodeItem):
+            self.logger.debug('CodeItem clicked on View Pane: ' + item.name)
+            if item != self.dependency_model.get_root_code_item():
+                self.dependency_model.set_root_code_item(item)
+                self.treeview3.expandAll()
+
+            cache = dict()
+            cache['object_name'] = item.name
+            cache['code'] = item.base_data.code
+            cache['compare_code'] = item.compare_data.code
+            self.code_text_edit_cache = cache
+            self.show_code_text()
+            self.show_info(item)
+        else:
+            if self.dependency_model.get_root_code_item():
+                self.dependency_model.set_root_code_item(None)
+            self.item_info.setPlainText('')
+            self.code_text_edit_cache = None
+            self.code_text_edit.setText('')
+
+    def show_info(self, code_item):
+        """
+
+        :param code_item:
+        :return:
+        """
+        if not code_item:
+            self.item_info.setPlainText('')
+            return
+        name = code_item.name
+
+        if self.states['base_loaded'] in self.state_machine.configuration():
+            gui = GUI_SELECT
+        elif self.states['compare_loaded'] in self.state_machine.configuration():
+            gui = GUI_COMPARE
+        else:
+            self.item_info.setPlainText('')
+            return
+        header = self.object_type(code_item) + ': ' + name
+        data = code_item.get_context_data(gui)
+        denodo_path = data.denodo_path
+        repository_path = str(code_item.get_file_path(Path(code_item.chapter.name)))
+        sources = list([f"[{self.object_type(source)} : {source.name}]"
+                        for source in self.get_item_sources(code_item, gui)])
+        sources = set(sources)
+        source_string = '\n>> ' + '\n>> '.join(sources)
+        info = header
+        info += f"\nDenodo path: {denodo_path}"
+        info += f"\nRepository path: {repository_path}"
+
+        info += f"\nSources: {source_string}"
+        self.item_info.setPlainText(info)
+
+    def get_item_sources(self, item: CodeItem, gui: int):
+        """
+
+        :param item:
+        :param gui:
+        :return:
+        """
+        data = item.get_context_data(gui)
+        last = True if len(data.dependencies) == 1 else False
+        for dependency in data.dependencies:
+            if last:
+                yield dependency
+            yield from self.get_item_sources(dependency, gui)
+
+    @staticmethod
+    def object_type(code_item):
+        """
+
+        :param code_item:
+        :return:
+        """
+        assert isinstance(code_item, CodeItem)
+        object_type = code_item.chapter.name[:-1] if code_item.chapter.name != 'DATABASE' else 'DATABASE'
+        return object_type.capitalize()
+
+    def on_selection_changed(self, item: TreeItem):
+        """
+        Event handler for changes of the selection (check boxes) in the treeview1
+        :param item:
+        :return:
+        """
+        info = ''
+        selected_string = 'selected' if item.selected else 'unselected'
+
+        if isinstance(item, Chapter):
+            msg = f"Chapter:{item.name} got {selected_string}."
+            self.logger.info(msg)
+            self.status_bar.showMessage(msg)
+        elif isinstance(item, DenodoFolder):
+            msg = f"Denodo folder:{item.name} got {selected_string}."
+            self.logger.info(msg)
+            self.status_bar.showMessage(msg)
+        elif isinstance(item, CodeItem):
+            mode = self.get_mode()
+            item_string = f"{self.object_type(item)}:{item.name}"
+            msg = f"{item_string} got {selected_string}."
+            self.logger.info(msg)
+            self.status_bar.showMessage(msg)
+            if mode & GUI_SELECT:
+                data = item.base_data
+                if item.selected:
+                    info = f"Please check if all dependencies of {item_string} are fulfilled.\n"
+                    info += "This software does not check that."
+                    self.status_bar.showMessage(info)
+                else:
+                    if any([dependee.selected for dependee in data.dependees]):
+                        info = 'Warning: This item has other items that are dependent on it.\n'
+                        info += 'These are now orphaned.\nPlease see log file for the list of affected items.'
+                        dependees_orphaned = [dependee for dependee in data.dependees if dependee.selected]
+                        for dependee in dependees_orphaned:
+                            orphan_string = f"{self.object_type(dependee)}:{dependee.name}"
+                            self.logger.warning(f"Un-selecting of {item_string} caused orphan: {orphan_string}")
+
+            elif mode & GUI_COMPARE:
+                data = item.compare_data
+                if item.selected:
+                    if item.color == red:  # lost item got selected
+                        data.code = item.base_data.code  # fill compare code with base code, so code can be saved
+                        items = {code_item.object_name for code_item in item.base_data.dependencies}
+                        dependencies_not_met = [item for item in items if not data.code or not item.selected]
+                        if any(dependencies_not_met):
+                            info = 'Warning: This base data item depends on base data items\n'
+                            info += 'that are not selected or do not exist in the compare base.\n'
+                            info += 'Please see log file for the list of dependencies.'
+                            for dependency_not_met in dependencies_not_met:
+                                dependency_string = f"{self.object_type(dependency_not_met)}:{dependency_not_met.name}"
+                                self.logger.warning(f"Selecting of {item_string} caused dependency to be "
+                                                    f"broken with: {dependency_string}")
+                    else:
+                        info = f"Please check if all dependencies of {item_string} are fulfilled."
+                        self.status_bar.showMessage(info)
+                        info += "\nThis software does not check that."
+                else:
+                    if item.color == red:  # lost item got unselected
+                        data.code = ''  # remove the code again
+                    if any([dependee.selected for dependee in data.dependees]):
+                        info = 'Warning: This item has other items that are dependent on it.'
+                        self.status_bar.showMessage(info)
+                        info += '\nThese are now orphaned.\nPlease see log file for the list of affected items.'
+                        dependees_orphaned = [dependee for dependee in data.dependees if dependee.selected]
+                        for dependee in dependees_orphaned:
+                            orphan_string = f"{self.object_type(dependee)}:{dependee.name}"
+                            self.logger.warning(f"Un-selecting of {item_string} caused orphan: {orphan_string}")
+        if info:
+            self.item_info.setPlainText(info)
 
     def on_about_vql_manager(self):
         """Event handler for the click on the About menu item in the help menu.
@@ -3733,6 +3988,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        # noinspection PyCallByClass,PyTypeChecker,PyArgumentList
         QMessageBox.about(self, 'About ' + self.windowTitle(), about_text)
 
     def on_about_qt(self):
@@ -3742,6 +3998,7 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
+        # noinspection PyCallByClass,PyTypeChecker
         QMessageBox.aboutQt(self, self.windowTitle())
 
     @staticmethod
@@ -3756,22 +4013,47 @@ class VQLManagerWindow(QMainWindow):
         :return: the constructed html
         :rtype: str
         """
+
+        def format_sql(_code: str)->str:
+            """
+            
+            :param _code: 
+            :return: 
+            """
+            chars = 4
+            start = _code.find(' AS SELECT ') + chars
+            end = _code.find(';', start)
+            if chars <= start < end:
+                clause = sqlparse.format(_code[start:end], reindent=True, indent_tabs=False, indent_width=2)
+                if clause:
+                    return _code[:start] + '\n' + clause + _code[end:]
+
+            return _code
+
+        def multi_substitution(_substitutions: list, _code: str):
+            """
+            Simultaneously perform all substitutions on the subject string.
+            :param _substitutions:
+            :param _code:
+            :return:
+            """
+            re_pattern = '|'.join(f"(\\b{re.escape(original)}\\b)" for original, substitute in _substitutions)
+            _substitutions = [substitute for original, substitute in _substitutions]
+            return re.sub(re_pattern, lambda x: _substitutions[x.lastindex - 1], _code)
+
         if not raw_code:
             return ''
 
         html = ''
         if code_type & (ORIGINAL_CODE | COMPARE_CODE):
-            code = raw_code.replace('\n', '<br />')
+            code = raw_code
+            code = format_sql(code)
+            code = multi_substitution(SUBSTITUTIONS, code)
+            code = code.replace('\n', '<br />\n')
             code = code.replace('    ', ' &nbsp; &nbsp; &nbsp; &nbsp; ')
-
-            for word in get_reserved_words():
-                code = code.replace(' ' + word + ' ', ' <strong>' + word + '</strong> ')  # rude method here
-            code = code.replace('<br />', '<br />\n')
-
             body = '<p style="color:' + white + '">' + code + '</p>'
             body = body.replace(object_name, '<font color="' + red + '">' + object_name + '</font>')
             html = doc_template(object_name, body)
-
         elif code_type & DIFF_CODE:
             html = doc_template(object_name, raw_code)
         return html
@@ -3783,20 +4065,19 @@ class VQLManagerWindow(QMainWindow):
         :rtype: None
         """
 
-        if self._mode & BASE_LOADED:
+        if self.get_mode() & BASE_LOADED:
             if self.denodo_folder_structure_action.isChecked():
-                if self.all_chapters_treeview.change_view(self._mode | DENODO_VIEW):
+                if self.tree_model.change_view(self.get_mode() | DENODO_VIEW):
                     self.denodo_folder_structure_action.setText('Switch to VQL View')
-                    logger.debug('Switching to Denodo View')
+                    self.logger.debug('Switching to Denodo View')
                 else:
                     message_to_user('Denodo view not possible. Missing folders in the code.', parent=self)
                     self.denodo_folder_structure_action.setChecked(False)
-                    logger.debug('Switch to Denodo View aborted')
+                    self.logger.debug('Switch to Denodo View aborted')
             else:
-                logger.debug('Switching to VQL View')
+                self.logger.debug('Switching to VQL View')
                 self.denodo_folder_structure_action.setText('Switch to DENODO View')
-                self.all_chapters_treeview.change_view(self._mode | VQL_VIEW)
-            self.update_tree_widgets()
+                self.tree_model.change_view(self.get_mode() | SCRIPT_VIEW)
 
     # dialogs for opening and saving
 
@@ -3806,7 +4087,7 @@ class VQLManagerWindow(QMainWindow):
         :return: filepath
         :rtype: Path
         """
-        logger.info('Asking file to open.')
+        self.logger.info('Asking file to open.')
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptOpen)
         dialog.setDefaultSuffix('vql')
@@ -3832,7 +4113,7 @@ class VQLManagerWindow(QMainWindow):
             message_to_user("This file has the wrong extension", parent=self)
             return None
 
-        logger.info('Got: ' + str(filename))
+        self.logger.info('Got: ' + str(filename))
         return filename
 
     def ask_repository_open(self)->Union[Path, None]:
@@ -3841,7 +4122,7 @@ class VQLManagerWindow(QMainWindow):
         :return: the folder path
         :rtype: Path
         """
-        logger.info('Asking repository to open.')
+        self.logger.info('Asking repository to open.')
         open_path = str(self.working_folder if self.working_folder else Path.cwd())
 
         dialog = QFileDialog(self)
@@ -3849,6 +4130,7 @@ class VQLManagerWindow(QMainWindow):
         dialog.setWindowTitle("Select Folder")
         dialog.setViewMode(QFileDialog.List)
         dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        # noinspection PyArgumentList,PyArgumentList
         folder = dialog.getExistingDirectory(self, "Open Directory", open_path)
 
         if not folder:
@@ -3857,7 +4139,7 @@ class VQLManagerWindow(QMainWindow):
         if not folder.is_dir():
             message_to_user("No folder found", parent=self)
             return None
-        logger.info('Got:' + str(folder))
+        self.logger.info('Got:' + str(folder))
         return folder
 
     def ask_repository_save(self)->Union[Path, None]:
@@ -3868,11 +4150,12 @@ class VQLManagerWindow(QMainWindow):
         :return: Folder to store the repository
         :rtype: Path
         """
-        logger.info('Asking repository to save.')
+        self.logger.info('Asking repository to save.')
         open_path = str(self.working_folder if self.working_folder else Path.cwd())
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptSave)
         dialog.setFileMode(QFileDialog.Directory)
+        # noinspection PyArgumentList,PyArgumentList
         folder = dialog.getExistingDirectory(self, "Save to Repository", open_path)
 
         if not folder:
@@ -3887,11 +4170,13 @@ class VQLManagerWindow(QMainWindow):
                 error_message_box('Error', 'Error creating folder', str(error), parent=self)
                 return None
 
-        if any([item_path.exists() for item_path, _
-                in self.all_chapters_treeview.get_selected_code_files(self.get_mode(), folder)]):
+        for file, content in self.root_item.get_selected_code_files(self.get_mode(), folder):
+            print(file)
+
+        if any([path.exists() for path, _ in self.root_item.get_selected_code_files(self.get_mode(), folder)]):
             if not self.ask_overwrite():
                 return None
-        logger.info('Got:' + str(folder))
+        self.logger.info('Got:' + str(folder))
         return folder
 
     def ask_file_save(self)->Union[Path, None]:
@@ -3902,12 +4187,13 @@ class VQLManagerWindow(QMainWindow):
         :return: the file path of the file to be written
         :rtype: Path
         """
-        logger.info('Asking file to save.')
+        self.logger.info('Asking file to save.')
         open_path = str(self.working_folder if self.working_folder else Path.cwd())
         dialog = QFileDialog(self)
         dialog.setAcceptMode(dialog.AcceptSave)
         dialog.setDefaultSuffix('vql')
         dialog.setFileMode(QFileDialog.AnyFile)
+        # noinspection PyArgumentList,PyArgumentList
         filename, _ = dialog.getSaveFileName(self, "Save File", open_path,
                                              "Denodo Scripts (*.vql);;Text files (*.txt);;All files (*)")
 
@@ -3921,7 +4207,7 @@ class VQLManagerWindow(QMainWindow):
                 return None
             else:
                 filename.unlink()
-        logger.info('Got:' + str(filename))
+        self.logger.info('Got:' + str(filename))
         return filename
 
     # General purpose dialogs
@@ -3949,7 +4235,8 @@ class VQLManagerWindow(QMainWindow):
         :return: Boolean if allowed
         :rtype: bool
         """
-        if not self.all_chapters_treeview.changed:
+
+        if not self.root_item.changed():
             return True
 
         msg = QMessageBox(self)
@@ -3966,27 +4253,7 @@ class VQLManagerWindow(QMainWindow):
         else:
             return False
 
-    async def read_file(self, file: Path)->str:
-        """General function to read in a file
-
-        :param file: The path to the file
-        :type file: Path
-        :return: The contents of the file as string
-        :rtype: str
-        """
-        logger.debug('Reading: ' + str(file))
-        content = None
-        try:
-            with file.open() as f:
-                content = f.read()
-        except (OSError, IOError) as error:
-            msg = "An error occurred during reading of file: "
-            error_message_box("Error", msg + str(file), str(error), parent=self)
-        if content:
-            logger.debug(f"{str(file)} with {len(content)} characters read.")
-        return content
-
-    async def write_file(self, file: Path, content: str)->bool:
+    def write_file(self, file: Path, content: str)->bool:
         """General function to write a file to disk
 
         :param file: the path where the file should be written to
@@ -3996,151 +4263,20 @@ class VQLManagerWindow(QMainWindow):
         :return: Boolean on success
         :rtype: bool
         """
-        logger.debug('Saving: ' + str(file))
-        if file.is_file():
-            try:
-                file.unlink()
-            except (OSError, IOError) as error:
-                msg = 'An error occurred during removal of file : '
-                error_message_box("Error", msg + str(file), str(error), parent=self)
-                self.statusBar.showMessage("Save error")
-                return False
 
+        # self.logger.debug('Saving: ' + str(file))
         try:
-            with file.open(mode='x') as f:
+            with file.open(mode='w') as f:
                 written = f.write(content)
-                logger.debug(f"Saved {written} characters to {str(file)}")
+                self.logger.debug(f"Saved {written} characters to {str(file)}")
                 return True
         except (OSError, IOError) as error:
-            msg = "An error occurred during writing of file: "
-            error_message_box("Error", msg + str(file), str(error), parent=self)
+            msg = f"An error occurred during writing of file: {str(file)}"
+            self.logger.error(msg)
+            error_message_box("Error", msg, str(error), parent=self)
             return False
 
-    # Saving and loading models
-
-    async def load_model_from_file(self, file: Path, new_mode: int):
-        """Loads a single .vql file into the VqlModel instance.
-
-        :param file: path of the file to bew loaded in
-        :type file: Path
-        :param new_mode: either BASE_FILE or COMP_FILE
-        :type new_mode: int
-        :return: None
-        :rtype: None
-        """
-        logger.debug(f"Loading model from file in {show_mode(new_mode)} mode")
-        self.statusBar.showMessage("Loading model from file.")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        tree = self.all_chapters_treeview
-        content = await self.read_file(file)
-        current_mode = self.get_mode()
-
-        if content:
-            tree.blockSignals(True)
-            await tree.parse(content, new_mode)
-            self.update_tree_widgets()
-            tree.blockSignals(False)
-        self.statusBar.showMessage("Ready")
-
-        if new_mode & BASE_FILE:
-            self.base_repository_file = file
-            new_mode |= BASE_LOADED
-        elif new_mode & COMP_FILE:
-            self.compare_repository_file = file
-
-            current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
-            new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_FILE
-
-        self.switch_to_mode(new_mode)
-        self.update_tree_widgets()
-        self.working_folder = file.resolve().parent
-        self.add_to_recent_files(file, FILE)
-        QApplication.restoreOverrideCursor()
-        logger.debug(f"Loading model from file finished.")
-
-    async def load_model_from_repository(self, folder: Path, new_mode: int):
-        """Loads a repository folder structure into the VqlModel instance.
-
-        :param folder: the folder containing the repository
-        :type folder: Path
-        :param new_mode: flag indication BASE_REPO or COMP_REPO
-        :return: None
-        :rtype: None
-        """
-        logger.debug(f"Loading model from repository in {show_mode(new_mode)} mode")
-
-        self.statusBar.showMessage("Loading model")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-
-        existing_folders = {sub_folder for sub_folder in folder.iterdir()}
-        possible_folders = {folder / sub_folder for sub_folder in CHAPTER_NAMES}
-        matching_folders = existing_folders & possible_folders
-        if not matching_folders:
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            message = "No repository found. Did not find any matching sub folders."
-            message_to_user(message, parent=self)
-            self.statusBar.showMessage(message)
-            return
-
-        msg = 'Make sure your repository is not corrupt.'
-        part_files = [folder / sub_folder / LOG_FILE_NAME
-                      for sub_folder in CHAPTER_NAMES if folder / sub_folder in matching_folders]
-        non_existing_part_files = [str(part_file) for part_file in part_files if not part_file.is_file()]
-        existing_part_files = [part_file for part_file in part_files if part_file.is_file()]
-        if non_existing_part_files:
-            missing = ', '.join(non_existing_part_files)
-            message_to_user(f"{LOG_FILE_NAME} file(s): {missing} not found. {msg}", parent=self)
-
-        all_code_files = list()
-
-        for part_file in existing_part_files:
-            file_content = await self.read_file(part_file)
-            code_files = [Path(code_file) for code_file in file_content.split('\n')]
-            non_existing_code_files = [str(code_file) for code_file in code_files if not code_file.is_file()]
-            if non_existing_code_files:
-                missing = ', '.join(non_existing_code_files)
-                message_to_user(f"Code file(s): {missing} not found. {msg}", parent=self)
-            existing_code_files = [(str(code_file.parent.name), code_file)
-                                   for code_file in code_files if code_file.is_file()]
-            all_code_files.extend(existing_code_files)
-
-        tree = self.all_chapters_treeview
-        content = PROP_QUOTE
-        for chapter in tree.chapters:
-            content += chapter.header
-            files = [file for chapter_name, file in all_code_files if chapter_name == chapter.name]
-            for file in files:
-                content += await self.read_file(file)
-
-        current_mode = self.get_mode()
-
-        if content:
-            tree.blockSignals(True)
-            await tree.parse(content, new_mode)
-            self.update_tree_widgets()
-            tree.blockSignals(False)
-        else:
-            self.statusBar.showMessage("Load Failed")
-            QApplication.restoreOverrideCursor()
-            return
-
-        if new_mode & BASE_REPO:
-            self.base_repository_folder = folder
-            new_mode |= BASE_LOADED
-        elif new_mode & COMP_REPO:
-            self.compare_repository_folder = folder
-            current_base_mode = current_mode & (BASE_REPO | BASE_FILE)
-            new_mode |= current_base_mode | COMP_LOADED | BASE_LOADED | COMP_REPO
-
-        self.switch_to_mode(new_mode)
-        self.working_folder = folder
-        self.update_tree_widgets()
-        self.add_to_recent_files(folder, REPO)
-        QApplication.restoreOverrideCursor()
-        self.statusBar.showMessage("Model Loaded")
-        logger.debug(f"Repository loaded with new mode {show_mode(self._mode)}")
-
-    async def save_model_to_file(self, file: Path)->bool:
+    def save_model_to_file(self, file: Path)->bool:
         """Saves the single .vql file.
 
         :param file: the file!
@@ -4149,24 +4285,23 @@ class VQLManagerWindow(QMainWindow):
         :rtype: bool
         """
 
-        logger.debug(f"Saving model to file in {file} in mode: {show_mode(self.get_mode())}")
-        tree = self.all_chapters_treeview
+        self.logger.debug(f"Saving model to file in {file} in mode: {show_mode(self.get_mode())}")
 
-        self.statusBar.showMessage("Saving")
-        tree.blockSignals(True)
-        content = tree.get_code_as_file(self.get_mode(), selected=True)
-        tree.blockSignals(False)
+        self.status_bar.showMessage("Saving")
+        self.treeview1.blockSignals(True)
+        content = self.root_item.get_code_as_file(self.get_mode(), selected=True)
+        self.treeview1.blockSignals(False)
         if content:
-            if await self.write_file(file, content):
-                self.statusBar.showMessage("Ready")
-                logger.debug("Saved OK")
+            if self.write_file(file, content):
+                self.status_bar.showMessage("Ready")
+                self.logger.debug("Saved OK")
                 return True
             else:
-                self.statusBar.showMessage("Save error")
-                logger.debug("Not Saved")
+                self.status_bar.showMessage("Save error")
+                self.logger.debug("Not Saved")
                 return False
 
-    async def save_model_to_repository(self, folder: Path)->bool:
+    def save_model_to_repository(self, folder: Path)->bool:
         """Saves the model selection to a repository.
 
         The files are written to chapter_folders
@@ -4175,58 +4310,49 @@ class VQLManagerWindow(QMainWindow):
         :return: boolean on success
         :rtype bool
         """
-        logger.debug(f"Saving model to repository in folder {folder} in mode: {show_mode(self.get_mode())}")
-        self.statusBar.showMessage("Saving")
+        self.logger.debug(f"Saving model to repository in folder {folder} in mode: {show_mode(self.get_mode())}")
+        self.status_bar.showMessage("Saving")
         if not folder:
-            self.statusBar.showMessage("Save Error")
+            self.status_bar.showMessage("Save Error")
             return False
 
-        tree = self.all_chapters_treeview
-        tree.blockSignals(True)
+        self.treeview1.blockSignals(True)
 
-        for part_log_filepath, part_log_content in tree.get_part_logs(folder):
+        for part_log_filepath, part_log_content in self.root_item.get_part_logs(folder):
 
-            if not part_log_content:
-                self.statusBar.showMessage("Save Error")
-                return False
-
-            if not part_log_filepath:
-                self.statusBar.showMessage("Save Error")
+            if not part_log_content or not part_log_filepath:
+                self.logger.error(f"No content while saving {part_log_filepath} ")
+                self.status_bar.showMessage("Save Error")
                 return False
 
             sub_folder = part_log_filepath.parent
             if not sub_folder.is_dir():
                 try:
-                    logger.debug("Creating Directory.")
+                    self.logger.debug("Creating Directory.")
                     sub_folder.mkdir(parents=True)
                 except (OSError, IOError) as error:
-                    self.statusBar.showMessage("Save Error")
-                    error_message_box("Error", "An error occurred during creation of the folders in : "
-                                      + sub_folder, str(error), parent=self)
+                    self.status_bar.showMessage("Save Error")
+                    msg = f"An error occurred during creation of the folders in {sub_folder}"
+                    error_message_box("Error", msg, str(error), parent=self)
                     return False
 
-            if not await self.write_file(part_log_filepath, part_log_content):
-                self.statusBar.showMessage("Save Error")
-                logger.debug("Saved not OK")
+            if not self.write_file(part_log_filepath, part_log_content):
+                self.status_bar.showMessage("Save Error")
                 return False
 
-        for file_path, content in tree.get_selected_code_files(self.get_mode(), folder):
-            if not content:
-                self.statusBar.showMessage("Save Error")
-                logger.debug("Saved not OK")
+        for file_path, content in self.root_item.get_selected_code_files(self.get_mode(), folder):
+            if not content or not file_path:
+                self.status_bar.showMessage("Save Error")
+                self.logger.debug(f"Saved not OK: {str(file_path)}")
                 return False
-            if not file_path:
-                self.statusBar.showMessage("Save Error")
-                logger.debug("Saved not OK")
-                return False
-            if not await self.write_file(file_path, content):
-                self.statusBar.showMessage("Save Error")
-                logger.debug("Saved not OK")
+            if not self.write_file(file_path, content):
+                self.status_bar.showMessage("Save Error")
+                self.logger.debug("Saved not OK")
                 return False
 
-        tree.blockSignals(False)
-        self.statusBar.showMessage("Ready")
-        logger.debug("Saved OK")
+        self.treeview1.blockSignals(False)
+        self.status_bar.showMessage("Ready")
+        self.logger.debug("Saved OK")
         return True
 
     def add_to_recent_files(self, file_path: Path, mode: int):
@@ -4239,11 +4365,11 @@ class VQLManagerWindow(QMainWindow):
         :return: None
         :rtype: None
         """
-        logger.debug(f"Adding {file_path} to recent file list in {show_mode(mode)} mode")
+        self.logger.debug(f"Adding {file_path} to recent file list in {show_mode(mode)} mode")
         settings = QSettings(COMPANY, APPLICATION_NAME)
 
         if not settings:
-            logger.debug("No resent file settings found.")
+            self.logger.debug("No resent file settings found.")
             return
 
         if mode & FILE:
@@ -4263,7 +4389,7 @@ class VQLManagerWindow(QMainWindow):
         settings.setValue(settings_list, paths)
 
         self.update_recent_file_actions()
-        logger.debug("Path added to recent files or folders.")
+        self.logger.debug("Path added to recent files or folders.")
 
     def show_code_text(self):
         """Shows the code of the clicked CodeItem in the Code edit widget.
@@ -4277,74 +4403,19 @@ class VQLManagerWindow(QMainWindow):
             item_data = self.code_text_edit_cache
             selector = self.code_show_selector
             put_text = self.code_text_edit.setHtml
-            set_title = self.code_text_edit_label.setText
             object_name = item_data['object_name']
             html_code = ''
-            if self._mode & GUI_SELECT:
+            if self.states['base_loaded'] in self.state_machine.configuration():
                 html_code = self.format_source_code(object_name, item_data['code'], selector)
-                set_title("Code: " + object_name)
-            elif self._mode & GUI_COMPARE:
-
+            elif self.states['compare_loaded'] in self.state_machine.configuration():
                 if selector & ORIGINAL_CODE:
                     html_code = self.format_source_code(object_name, item_data['code'], selector)
-                    set_title("Original Code: " + object_name)
                 elif selector & COMPARE_CODE:
                     html_code = self.format_source_code(object_name, item_data['compare_code'], selector)
-                    set_title("New Code: " + object_name)
                 elif selector & DIFF_CODE:
                     difference = CodeItem.get_diff(item_data['code'], item_data['compare_code'])
                     html_code = self.format_source_code(object_name, difference, selector)
-                    set_title("Differences : " + object_name)
             put_text(html_code)
-
-    def update_tree_widgets(self):
-        """Builds/sets new content of the selected_treeview
-
-        Like a screen update.
-        Used after the selection in the all_chapters_treeview is changed
-        This function copies the selected items and leaves out the chapters that are empty
-        The updates are timed because when big changes are made (when whole chapters are unselected)
-        the function should not redraw the screen to often.
-
-        :return: None
-        :rtype: None
-        """
-        logger.debug('Update_tree_widgets')
-        # stop the update timer
-        self.update_timer.stop()
-        # store former "blocked" indicator
-        blocked = self.all_chapters_treeview.signalsBlocked()
-
-        # block signals while updating
-        self.all_chapters_treeview.blockSignals(True)
-
-        # convenience pointer names
-        tree_sel = self.selected_treeview
-        root_sel = tree_sel.invisibleRootItem()
-
-        tree_all = self.all_chapters_treeview
-        root_all = tree_all.invisibleRootItem()
-        tree_sel.clear()
-        tree_all.pack()
-        root_sel.addChildren(root_all.clone().takeChildren())
-        #VqlModel.unpack(tree_sel)
-
-        # # itemIterator traverses over every node
-        self.remove_checkboxes(tree_sel)
-        self.all_chapters_treeview.blockSignals(blocked)
-
-    @staticmethod
-    def remove_checkboxes(tree: QTreeWidget):
-        """
-
-        :param tree:
-        :return:
-        """
-        item_iterator = QTreeWidgetItemIterator(tree)
-        while item_iterator.value():
-            item = item_iterator.value()
-            item.setData(0, Qt.CheckStateRole, QVariant())
-            item_iterator += 1
 
 
 def main():
@@ -4353,7 +4424,7 @@ def main():
     Boilerplate python code to start and end the application and allows it to be in a module or library
     :return:
     """
-    logger.info("Entering main")
+
     global app
 
     if version_info < (3, 6):
