@@ -3,24 +3,33 @@
 """
 Denodo VQL Manager
 This program shows GUI to split, select, combine and compare Denodo .vql files
-Dependencies: python3.6 PyQt5, qdarkstyle, sqlparse, diff_match_patch
+Dependencies: python3.6 PyQt5, qdarkstyle, sqlparse
 
-Installation
+Installation:
     Install python3.6 or later from https://www.python.org/
     Make sure its in your path.
 
     To test it run in console or command: python -V  or python3 -V or python3.6 -V
     Use the python command reporting version 3.6
-    in this example i assume it is python3
+    In this example i assume it is python3
 
-    on linux
+    On linux
     sudo python3.6 -m pip install wheel setuptools PyQt5 qdarkstyle sqlparse
 
-    on windows: open cmd in admin mode
+    on windows: open cmd
     python3.6 -m pip install wheel setuptools PyQt5 qdarkstyle sqlparse
 
     anaconda: open jupyter add the said libs
     Note: diff_match_patch may be called diff_match_patch_python
+
+    Put this file in a folder to your own preference, for example: C:\vqlmanager
+    Make a launcher or shortcut that states: python3 C:\vqlmanager\__main__.py
+    Make sure the launcher or shortcut starts in this folder
+
+    Open the launcher to start the program
+
+
+Usage:
 
 
 
@@ -29,7 +38,8 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 
 classes diff_match_patch and patch_object
-are written by fraser@google.com (Neil Fraser)
+are written by Neil Fraser (fraser@google.com)
+and are modified a bit for readability
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -542,8 +552,7 @@ class diff_match_patch:
         pointermid = pointermax
         pointerend = 0
         while pointermin < pointermid:
-            if (text1[-pointermid:len(text1) - pointerend] ==
-                    text2[-pointermid:len(text2) - pointerend]):
+            if (text1[-pointermid:len(text1) - pointerend] == text2[-pointermid:len(text2) - pointerend]):
                 pointermin = pointermid
                 pointerend = pointermin
             else:
@@ -1973,16 +1982,32 @@ if not log_filename.is_file():
         error_message_box("Log file error", _msg, str(e))
 
 
-logging.basicConfig(filename=log_filename, level=LOGGING_LEVEL, format=LOGGING_FORMAT, filemode="w")
-
-
-class LogWrapper(QObject, logging.Logger):
+class LogWrapper(QObject):
     """Wrapper class for logging.logger"""
 
     custom_signal = pyqtSignal(str)
+    loggers = set()
 
-    def __init__(self, name):
-        super(LogWrapper, self).__init__(name=name)
+    def __init__(self, name, format='', level=logging.INFO, filename='vql_manager.log', filemode='w'):
+
+        super(LogWrapper, self).__init__()
+        self.format = format
+        self.level = level
+        self.name = name
+        self.filename = filename
+        self.filemode = filemode
+
+        # logging.basicConfig(filename=self.filename, level=self.level, format=self.format, filemode=self.filemode)
+
+        self.log_formatter = logging.Formatter(self.format)
+        self.file_logger = logging.FileHandler(self.filename, mode=self.filemode)
+        self.file_logger.setFormatter(self.log_formatter)
+
+        self.logger = logging.getLogger(self.name)
+        if name not in self.loggers:
+            self.loggers.add(name)
+            self.logger.setLevel(self.level)
+            self.logger.addHandler(self.file_logger)
 
     def error(self, msg, *args, **kwargs):
         """
@@ -1994,7 +2019,7 @@ class LogWrapper(QObject, logging.Logger):
         """
 
         self.custom_signal.emit('ERROR: ' + msg)
-        super(LogWrapper, self).error(msg)
+        self.logger.error(msg)
 
     def info(self, msg, *args, **kwargs):
         """
@@ -2005,7 +2030,8 @@ class LogWrapper(QObject, logging.Logger):
         :return:
         """
         self.custom_signal.emit('INFO: ' + msg)
-        super(LogWrapper, self).info(msg)
+        # super(LogWrapper, self).info(msg)
+        self.logger.info(msg)
 
     def debug(self, msg, *args, **kwargs):
         """
@@ -2017,7 +2043,8 @@ class LogWrapper(QObject, logging.Logger):
         """
 
         self.custom_signal.emit('DEBUG: ' + msg)
-        super(LogWrapper, self).debug(msg)
+        # super(LogWrapper, self).debug(msg)
+        self.logger.debug(msg)
 
     def critical(self, msg, *args, **kwargs):
         """
@@ -2029,7 +2056,8 @@ class LogWrapper(QObject, logging.Logger):
         """
 
         self.custom_signal.emit('FATAL: ' + msg)
-        super(LogWrapper, self).critical(msg)
+        # super(LogWrapper, self).critical(msg)
+        self.logger.critical(msg)
 
     def warning(self, msg, *args, **kwargs):
         """
@@ -2041,7 +2069,8 @@ class LogWrapper(QObject, logging.Logger):
         """
 
         self.custom_signal.emit('WARNING: ' + msg)
-        super(LogWrapper, self).critical(msg)
+        # super(LogWrapper, self).critical(msg)
+        self.logger.warning(msg)
 
 
 def message_to_user(message: str, parent=None):
@@ -4783,7 +4812,8 @@ class VQLManagerWindow(QMainWindow):
         """
         # initialize main window calling its parent
         super(VQLManagerWindow, self).__init__(parent, Qt.Window)
-        self.logger = LogWrapper("vql_manager")
+        self.logger = LogWrapper('vqlmanager', format=LOGGING_FORMAT, level=LOGGING_LEVEL,
+                                 filename=log_filename, filemode='w')
         self.logger.debug("Start Window creation")
         self.setAttribute(Qt.WA_DeleteOnClose)  # close children on exit
 
@@ -6155,7 +6185,7 @@ class VQLManagerWindow(QMainWindow):
         try:
             with file.open(mode='w') as f:
                 written = f.write(content)
-                self.logger.debug(f"Saved {written} characters to {str(file)}")
+                # self.logger.debug(f"Saved {written} characters to {str(file)}")
                 return True
         except (OSError, IOError) as error:
             msg = f"An error occurred during writing of file: {str(file)}"
@@ -6208,33 +6238,37 @@ class VQLManagerWindow(QMainWindow):
         for part_log_filepath, part_log_content in self.root_item.get_part_logs(folder):
 
             if not part_log_content or not part_log_filepath:
-                self.logger.error(f"No content while saving {part_log_filepath} ")
-                self.status_bar.showMessage("Save Error")
-                return False
+                self.logger.debug(f"No content while saving {part_log_filepath} ")
+                continue
+                # self.status_bar.showMessage("Save Error")
+                # return False
 
             sub_folder = part_log_filepath.parent
             if not sub_folder.is_dir():
                 try:
-                    self.logger.debug("Creating Directory.")
+                    self.logger.debug(f"Creating Directory: {sub_folder}")
                     sub_folder.mkdir(parents=True)
                 except (OSError, IOError) as error:
                     self.status_bar.showMessage("Save Error")
-                    msg = f"An error occurred during creation of the folders in {sub_folder}"
+                    msg = f"An error occurred during creation of folder: {sub_folder}"
                     error_message_box("Error", msg, str(error), parent=self)
+                    self.treeview1.blockSignals(False)
                     return False
 
             if not self.write_file(part_log_filepath, part_log_content):
                 self.status_bar.showMessage("Save Error")
+                self.treeview1.blockSignals(False)
                 return False
 
         for file_path, content in self.root_item.get_selected_code_files(self.get_mode(), folder):
             if not content or not file_path:
                 self.status_bar.showMessage("Save Error")
-                self.logger.debug(f"Saved not OK: {str(file_path)}")
-                return False
+                self.logger.warning(f"Missing content or file path: {str(file_path)}")
+                continue
             if not self.write_file(file_path, content):
-                self.status_bar.showMessage("Save Error")
-                self.logger.debug("Saved not OK")
+                self.status_bar.showMessage(f"Save Error: {file_path}")
+                self.logger.warning(f"Save of {file_path} did not succeed")
+                self.treeview1.blockSignals(False)
                 return False
 
         self.treeview1.blockSignals(False)
