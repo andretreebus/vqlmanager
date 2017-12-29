@@ -20,7 +20,6 @@ Installation:
     python3.6 -m pip install wheel setuptools PyQt5 qdarkstyle sqlparse
 
     anaconda: open jupyter add the said libs
-    Note: diff_match_patch may be called diff_match_patch_python
 
     Put this file in a folder to your own preference, for example: C:\vqlmanager
     Make a launcher or shortcut that states: python3 C:\vqlmanager\__main__.py
@@ -38,7 +37,7 @@ Email: andretreebus@hotmail.com
 Last edited: November 2017
 
 The classes DiffMatchPatch and PatchObject are written by Neil Fraser (fraser@google.com)
-These clases are modified for readability and python3 use only
+These classes are modified for readability and python3 use only
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -103,12 +102,11 @@ class PatchObject:
         self.length2 = 0
 
     def __str__(self) -> str:
-        """Emmulate GNU diff's format.
+        """Emulate GNU diff's format.
         Header: @@ -382,8 +481,9 @@
-        Indicies are printed as 1-based, not 0-based.
+        Indices are printed as 1-based, not 0-based.
 
-        Returns:
-          The GNU diff string.
+        :return: The GNU diff string.
         """
         if self.length1 == 0:
             coordinates1 = str(self.start1) + ",0"
@@ -150,7 +148,7 @@ class DiffMatchPatch:
     BLANK_LINE_START = compile(r"^\r?\n\r?\n")
 
     def __init__(self):
-        """Inits a diff_match_patch object with default settings.
+        """Initializes a diff_match_patch object with default settings.
         Redefine these in your program to override the defaults.
         """
 
@@ -187,8 +185,8 @@ class DiffMatchPatch:
         :param check_lines: Optional speedup flag.  If present and false, then don't run
             a line-level diff first to identify the changed areas.
             Defaults to true, which does a faster, slightly less optimal diff.
-        :param deadline: Optional time when the diff should be complete by.  Used
-            internally for recursive calls.  Users should set DiffTimeout instead.
+        :param deadline: Optional time when the diff should be complete by.
+            Used internally for recursive calls.  Users should set DiffTimeout instead.
         :return: Array of changes
         """
 
@@ -520,7 +518,7 @@ class DiffMatchPatch:
 
         :param diffs:  Array of diff tuples.
         :param line_array: Array of unique strings.
-        :return:
+        :return: None
         """
         for x in range(len(diffs)):
             text = []
@@ -653,8 +651,8 @@ class DiffMatchPatch:
             :param _short_text: Shorter string.
             :param i: Start index of quarter length substring within longtext.
             :return: Five element Array, containing the prefix of longtext, the suffix of
-              longtext, the prefix of shorttext, the suffix of shorttext and the
-              common middle.  Or None if there was no match.
+                longtext, the prefix of short_text, the suffix of short_text and the
+                common middle.  Or None if there was no match.
             """
 
             seed = _long_text[i:i + len(_long_text) // 4]
@@ -761,10 +759,6 @@ class DiffMatchPatch:
         self.diff_cleanup_semantic_loss_less(diffs)
 
         # Find any overlaps between deletions and insertions.
-        # e.g: <del>abcxxx</del><ins>xxxdef</ins>
-        #   -> <del>abc</del>xxx<ins>def</ins>
-        # e.g: <del>xxxabc</del><ins>defxxx</ins>
-        #   -> <ins>def</ins>xxx<del>abc</del>
         # Only extract an overlap if it is as big as the edit ahead or behind it.
         pointer = 1
         while pointer < len(diffs):
@@ -797,7 +791,7 @@ class DiffMatchPatch:
         e.g: The c<ins>at c</ins>ame. -> The <ins>cat </ins>came.
 
         :param diffs: Array of diff tuples.
-        :return:
+        :return: None
         """
         def diff_cleanup_semantic_score(one: str, two: str)->int:
             """Given two strings, compute a score representing whether the
@@ -805,12 +799,9 @@ class DiffMatchPatch:
             Scores range from 6 (best) to 0 (worst).
             Closure, but does not reference any external variables.
 
-            Args:
-              one: First string.
-              two: Second string.
-
-            Returns:
-              The score.
+            :param one: First string.
+            :param two: Second string.
+            :return: The score
             """
             if not one or not two:
                 # Edges are the best.
@@ -901,7 +892,7 @@ class DiffMatchPatch:
         """Reduce the number of edits by eliminating operationally trivial equalities.
 
         :param diffs:  Array of diff tuples.
-        :return:
+        :return: None
         """
         changes = False
         equalities = []  # Stack of indices where equalities are found.
@@ -972,8 +963,8 @@ class DiffMatchPatch:
         """Reorder and merge like edit sections.  Merge equalities.
         Any edit section can move as long as it doesn't cross an equality.
 
-        :param diffs:
-        :return: Array of diff tuples.
+        :param diffs: The diffs to be cleaned up, this diffs list is edited here as if passed by ref
+        :return: None
         """
         diffs.append((self.DIFF_EQUAL, ''))  # Add a dummy entry at the end.
         pointer = 0
@@ -1505,11 +1496,8 @@ class DiffMatchPatch:
     def patch_deep_copy(patches: List[PatchObject])->List[PatchObject]:
         """Given an array of patches, return another array that is identical.
 
-        Args:
-          patches: Array of Patch objects.
-
-        Returns:
-          Array of Patch objects.
+        :param patches: Array of Patch objects.
+        :return: Array of Patch objects.
         """
         patches_copy = []
         for patch in patches:
@@ -1674,14 +1662,14 @@ class DiffMatchPatch:
         for x in range(len(patches)):
             if patches[x].length1 <= patch_size:
                 continue
-            bigpatch = patches[x]
+            big_patch = patches[x]
             # Remove the big old patch.
             del patches[x]
             x -= 1
-            start1 = bigpatch.start1
-            start2 = bigpatch.start2
+            start1 = big_patch.start1
+            start2 = big_patch.start2
             pre_context = ''
-            while len(bigpatch.diffs) != 0:
+            while len(big_patch.diffs) != 0:
                 # Create one of several smaller patches.
                 patch = PatchObject()
                 empty = True
@@ -1691,13 +1679,13 @@ class DiffMatchPatch:
                     patch.length1 = patch.length2 = len(pre_context)
                     patch.diffs.append((self.DIFF_EQUAL, pre_context))
 
-                while len(bigpatch.diffs) != 0 and patch.length1 < patch_size - self.patch_margin:
-                    (diff_type, diff_text) = bigpatch.diffs[0]
+                while len(big_patch.diffs) != 0 and patch.length1 < patch_size - self.patch_margin:
+                    (diff_type, diff_text) = big_patch.diffs[0]
                     if diff_type == self.DIFF_INSERT:
                         # Insertions are harmless.
                         patch.length2 += len(diff_text)
                         start2 += len(diff_text)
-                        patch.diffs.append(bigpatch.diffs.pop(0))
+                        patch.diffs.append(big_patch.diffs.pop(0))
                         empty = False
                     elif (diff_type == self.DIFF_DELETE and len(patch.diffs) == 1
                           and patch.diffs[0][0] == self.DIFF_EQUAL and len(diff_text) > 2 * patch_size):
@@ -1707,7 +1695,7 @@ class DiffMatchPatch:
                         start1 += len(diff_text)
                         empty = False
                         patch.diffs.append((diff_type, diff_text))
-                        del bigpatch.diffs[0]
+                        del big_patch.diffs[0]
                     else:
                         # Deletion or equality.  Only take as much as we can stomach.
                         diff_text = diff_text[:patch_size - patch.length1 - self.patch_margin]
@@ -1720,16 +1708,16 @@ class DiffMatchPatch:
                             empty = False
 
                         patch.diffs.append((diff_type, diff_text))
-                        if diff_text == bigpatch.diffs[0][1]:
-                            del bigpatch.diffs[0]
+                        if diff_text == big_patch.diffs[0][1]:
+                            del big_patch.diffs[0]
                         else:
-                            bigpatch.diffs[0] = (bigpatch.diffs[0][0], bigpatch.diffs[0][1][len(diff_text):])
+                            big_patch.diffs[0] = (big_patch.diffs[0][0], big_patch.diffs[0][1][len(diff_text):])
 
                 # Compute the head context for the next patch.
                 pre_context = self.diff_text2(patch.diffs)
                 pre_context = pre_context[-self.patch_margin:]
                 # Append the end context for this patch.
-                post_context = self.diff_text1(bigpatch.diffs)[:self.patch_margin]
+                post_context = self.diff_text1(big_patch.diffs)[:self.patch_margin]
                 if post_context:
                     patch.length1 += len(post_context)
                     patch.length2 += len(post_context)
@@ -1912,79 +1900,71 @@ class LogWrapper(QObject):
 
     # noinspection PyUnusedLocal
     def error(self, msg, *args, **kwargs):
-        """
+        """Wraps logger function and sends a signal
 
-        :param msg:
-        :param args:
-        :param kwargs:
-        :return:
+        :param msg: the message to log
+        :param args: not used
+        :param kwargs: not used
+        :return: None
         """
-
         self.custom_signal.emit('ERROR: ' + msg)
         self.logger.error(msg)
 
     # noinspection PyUnusedLocal
     def info(self, msg, *args, **kwargs):
-        """
+        """Wraps logger function and sends a signal
 
-        :param msg:
-        :param args:
-        :param kwargs:
-        :return:
+        :param msg: the message to log
+        :param args: not used
+        :param kwargs: not used
+        :return: None
         """
         self.custom_signal.emit('INFO: ' + msg)
-        # super(LogWrapper, self).info(msg)
         self.logger.info(msg)
 
     # noinspection PyUnusedLocal
     def debug(self, msg, *args, **kwargs):
-        """
+        """Wraps logger function and sends a signal
 
-        :param msg:
-        :param args:
-        :param kwargs:
-        :return:
+        :param msg: the message to log
+        :param args: not used
+        :param kwargs: not used
+        :return: None
         """
-
         self.custom_signal.emit('DEBUG: ' + msg)
-        # super(LogWrapper, self).debug(msg)
         self.logger.debug(msg)
 
     # noinspection PyUnusedLocal
     def critical(self, msg, *args, **kwargs):
-        """
+        """Wraps logger function and sends a signal
 
-        :param msg:
-        :param args:
-        :param kwargs:
-        :return:
+        :param msg: the message to log
+        :param args: not used
+        :param kwargs: not used
+        :return: None
         """
-
         self.custom_signal.emit('FATAL: ' + msg)
-        # super(LogWrapper, self).critical(msg)
         self.logger.critical(msg)
 
     # noinspection PyUnusedLocal
     def warning(self, msg, *args, **kwargs):
-        """
+        """Wraps logger function and sends a signal
 
-        :param msg:
-        :param args:
-        :param kwargs:
-        :return:
+        :param msg: the message to log
+        :param args: not used
+        :param kwargs: not used
+        :return: None
         """
-
         self.custom_signal.emit('WARNING: ' + msg)
-        # super(LogWrapper, self).critical(msg)
         self.logger.warning(msg)
 
 
 def message_to_user(message: str, parent=None):
-    """
+    """General messagebox to inform the user
 
-    :param message:
-    :param parent:
-    :return:
+    :param message: the message of the messagebox
+    :param parent: the parent widget
+    :return: None
     """
 
     msg = QMessageBox(parent)
@@ -2138,7 +2118,7 @@ def show_role(role: int)->str:
     """Debug function printing the role info
 
     :param role: the role
-    :return:
+    :return: human readable string
     """
     result = 'NOTHING'
     if role == DISPLAY:
@@ -2161,8 +2141,8 @@ def show_role(role: int)->str:
 def show_color(item_color: QBrush)->str:
     """Debug function to get the color in human readable form
 
-    :param item_color:
-    :return:
+    :param item_color: The color as a QBrush
+    :return: human readable string
     """
     color = 'None'
     if item_color:
@@ -2181,9 +2161,7 @@ def show_mode(mode: int)->str:
     """Returns debug info string to logger.
 
     :param mode: the mode to show
-    :type mode: int
     :return: a human readable string with flags
-    :rtype: str
     """
     gui_types = {GUI_NONE: "GUI_NONE", GUI_SELECT: "GUI_SELECT", GUI_COMPARE: "GUI_COMPARE"}
 
@@ -2209,7 +2187,7 @@ def show_mode(mode: int)->str:
 def get_reserved_words()->Iterator[Sized]:
     """Returns a list (Iterator) over the Denodo reserved words.
 
-    :return: the list as Iterator
+    :return: the list with reserved words
     """
     words = '''ADD,AS,ANY,OPT,OR,CREATE,VIEW,NULL,ALTER,NOT,FROM,AND,SELECT,WHEN,JOIN,IS,ON,LEFT,CASE,TABLE,
     WHERE,DEFAULT,OFF,JDBC,INNER,OF,ZERO,NOS,UNION,DF,DISTINCT,ASC,FULL,FALSE,DESC,BASE,DATABASE,TRUE,ALL,
@@ -2345,7 +2323,7 @@ def read_file(file: Path, logger) -> str:
 
     :param file: the file to be read
     :param logger: the logger in the app
-    :return:
+    :return: None
     """
 
     logger.debug('Reading: ' + str(file))
@@ -2378,7 +2356,7 @@ class TransOpenBase(QSignalTransition):
         self.app = _app
         self.setTargetState(target_state)
 
-    def eventTest(self, event: QStateMachine.SignalEvent):
+    def eventTest(self, event: QStateMachine.SignalEvent)->bool:
         """Selector for the transition. this function listens to the signals and tests them.
         If the test succeeds the transition is called.
 
@@ -2476,7 +2454,7 @@ class TransResetBase(QSignalTransition):
         self.app = _app
         self.setTargetState(target_state)
 
-    def eventTest(self, event: QStateMachine.SignalEvent):
+    def eventTest(self, event: QStateMachine.SignalEvent)->bool:
         """Selector for the transition. this function listens to the signals and tests them.
         If the test succeeds the transition is called.
 
@@ -2557,7 +2535,7 @@ class TransOpenCompare(QSignalTransition):
         self.app = _app
         self.setTargetState(target_state)
 
-    def eventTest(self, event: QStateMachine.SignalEvent):
+    def eventTest(self, event: QStateMachine.SignalEvent)->bool:
         """Selector for the transition. this function listens to the signals and tests them.
         If the test succeeds the transition is called.
 
@@ -2648,7 +2626,7 @@ class TransRemoveCompare(QSignalTransition):
         self.app = _app
         self.setTargetState(target_state)
 
-    def eventTest(self, event: QStateMachine.SignalEvent):
+    def eventTest(self, event: QStateMachine.SignalEvent)->bool:
         """Selector for the transition. this function listens to the signals and tests them.
         If the test succeeds the transition is called.
 
@@ -2723,7 +2701,7 @@ class TransResetAll(QSignalTransition):
         self.app = _app
         self.setTargetState(target_state)
 
-    def eventTest(self, event: QStateMachine.SignalEvent):
+    def eventTest(self, event: QStateMachine.SignalEvent)->bool:
         """Selector for the transition. this function listens to the signals and tests them.
         If the test succeeds the transition is called.
 
