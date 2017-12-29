@@ -5060,7 +5060,7 @@ class VQLManagerWindow(QMainWindow):
 
     @staticmethod
     def create_tree_view(tooltip: str='')->QTreeView:
-        """Factory for instances of TreeView, settting common properties of them all
+        """Factory for instances of TreeView, setting common properties of them all
 
         :param tooltip: Initial tooltip
         :return: the TreeView created
@@ -5078,11 +5078,11 @@ class VQLManagerWindow(QMainWindow):
         tree_view.setUniformRowHeights(True)
         tree_view.setAnimated(True)
 
+        # hack to make horizontal scrollbars appear when needed
         header = tree_view.header()
         header.setStretchLastSection(False)
         header.setResizeContentsPrecision(0)
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
-
         tree_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         if tooltip:
