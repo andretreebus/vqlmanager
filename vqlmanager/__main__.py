@@ -1879,7 +1879,7 @@ class LogWrapper(QObject):
         :param filemode: filemode of teh log: either 'a' or 'w'
         """
 
-        super(LogWrapper, self).__init__()
+        super().__init__()
         self.format = _format
         self.level = level
         self.name = name
@@ -2352,7 +2352,7 @@ class TransOpenBase(QSignalTransition):
             eventTest is called after this signal is emitted. When the test returns True
             the onTransition is called by the state_machine
         """
-        super(TransOpenBase, self).__init__(signal, source_state)
+        super().__init__(signal, source_state)
         self.app = _app
         self.setTargetState(target_state)
 
@@ -2450,7 +2450,7 @@ class TransResetBase(QSignalTransition):
             eventTest is called after this signal is emitted. When the test returns True
             the onTransition is called by the state_machine
         """
-        super(TransResetBase, self).__init__(signal, source_state)
+        super().__init__(signal, source_state)
         self.app = _app
         self.setTargetState(target_state)
 
@@ -2531,7 +2531,7 @@ class TransOpenCompare(QSignalTransition):
             eventTest is called after this signal is emitted. When the test returns True
             the onTransition is called by the state_machine
         """
-        super(TransOpenCompare, self).__init__(signal, source_state)
+        super().__init__(signal, source_state)
         self.app = _app
         self.setTargetState(target_state)
 
@@ -2622,7 +2622,7 @@ class TransRemoveCompare(QSignalTransition):
             eventTest is called after this signal is emitted. When the test returns True
             the onTransition is called by the state_machine
         """
-        super(TransRemoveCompare, self).__init__(signal, source_state)
+        super().__init__(signal, source_state)
         self.app = _app
         self.setTargetState(target_state)
 
@@ -2697,7 +2697,7 @@ class TransResetAll(QSignalTransition):
             eventTest is called after this signal is emitted. When the test returns True
             the onTransition is called by the state_machine
         """
-        super(TransResetAll, self).__init__(signal, source_state)
+        super().__init__(signal, source_state)
         self.app = _app
         self.setTargetState(target_state)
 
@@ -2778,8 +2778,9 @@ class TransResetAll(QSignalTransition):
 
 class TreeItem(object):
     """Base class for items in tree_model used in tree_views. Will be sub-classed for all treelike items."""
-    BRANCH = 1
-    LEAF = 2
+
+    __slots__ = ['BRANCH', 'LEAF', 'parent_item', 'class_type', 'child_items', 'column_data', 'name', 'color',
+                 'selected', 'tristate', 'tooltip', 'node_type', 'icon']
 
     def __init__(self, class_type, parent=None, index: int=None):
         """Class initializer
@@ -2788,6 +2789,8 @@ class TreeItem(object):
         :param parent: the parent, the higher node in the tree
         :param index: the child index this node has in the parent object
         """
+        self.BRANCH = 1
+        self.LEAF = 2
         self.parent_item = parent
         self.class_type = class_type
         if parent:
@@ -2805,6 +2808,10 @@ class TreeItem(object):
         self.tooltip = ''
         self.node_type = TreeItem.BRANCH
         self.icon = QVariant()
+
+    def __iter__(self):
+        for item in self.child_items:
+            yield item
 
     def changed(self)->bool:
         """Returns True if the item has changed. This means is not selected of has children that are not selected
@@ -3131,6 +3138,7 @@ class TreeItem(object):
 class ItemData:
     """Code item state dependent data. A code item can have 2 Item data objects,
     one used as base_data and one used as compare_data """
+    __slots__ = ['denodo_path', 'depend_path', 'code', 'dependencies', 'dependees', 'dependee_parent', 'dependees_tree']
 
     def __init__(self, root_item):
         """Initializer of the class
@@ -3150,7 +3158,8 @@ class ItemData:
 class CodeItem(TreeItem):
     """CodeItem class represents the code for a single Denodo object,
     e.g. a wrapper or a view or a base view"""
-    headers = []
+
+    __slots__ = ['chapter', 'script_path', 'headers', 'base_data', 'compare_data']
 
     def __init__(self, parent: TreeItem, name: str, index: int=None):
         """Initializer of the class sets up its data
@@ -3159,7 +3168,8 @@ class CodeItem(TreeItem):
         :param name: name of the code item
         :param index: if given, this will make this CodeItem the child with index index in the parents child list
         """
-        super(CodeItem, self).__init__(CodeItem, parent=parent, index=index)
+        super().__init__(CodeItem, parent=parent, index=index)
+        self.headers = []
         self.class_type = CodeItem
         if isinstance(parent, Chapter):
             self.chapter = self.parent_item
@@ -3432,6 +3442,7 @@ class Chapter(TreeItem):
     The Chapter class also represents a folder in the repository.
     The Chapter class is the owner/parent of the CodeItems.
     """
+    __slots__ = ['header', 'code_items', 'gui']
 
     def __init__(self, name: str, parent: TreeItem=None):
         """Initializer of the class objects
@@ -3439,7 +3450,7 @@ class Chapter(TreeItem):
         :param parent: reference to the parent or owner, this should be a VqlModel class (QTreeWidget)
         :param name: string name of the chapter
         """
-        super(Chapter, self).__init__(Chapter, parent=parent)
+        super().__init__(Chapter, parent=parent)
         self.class_type = Chapter
         self.name = name
         self.column_data = [self.name]
@@ -3563,6 +3574,7 @@ class Chapter(TreeItem):
 
 class DenodoFolder(TreeItem):
     """Class representing a Denodo folder"""
+    __slots__ = ['sub_folders', 'gui']
 
     def __init__(self, parent: TreeItem, name: str):
         """
@@ -3570,7 +3582,7 @@ class DenodoFolder(TreeItem):
         :param parent: the parent (DenodoFolder) if this folder
         :param name: the name of this folder
         """
-        super(DenodoFolder, self).__init__(DenodoFolder, parent=parent)
+        super().__init__(DenodoFolder, parent=parent)
         self.class_type = DenodoFolder
         self.name = name
         self.column_data = [self.name]
@@ -3583,9 +3595,8 @@ class DenodoFolder(TreeItem):
 
         :return: None
         """
-        self.name = None
         self.sub_folders = None
-        self.column_data = None
+        self.gui = None
         super().clear()
 
 
@@ -3595,13 +3606,14 @@ class RootItem(TreeItem):
     Generally this is the class the QMainWindow and QAbstractModel class talk to.
     It holds all data and serves loading and saving.
     """
+    __slots__ = ['chapters', 'storage_list', 'header', 'view']
 
     def __init__(self, header: str):
         """
         Class Initializer
         :param header: The header of the column 0 in the treeview1
         """
-        super(RootItem, self).__init__(RootItem)
+        super().__init__(RootItem)
         self.class_type = RootItem
         self.chapters = self.child_items
         self.storage_list = list()
@@ -4044,6 +4056,7 @@ class RootItem(TreeItem):
 
 class Dependee(TreeItem):
         """Wrapper Class representing a dependee code item"""
+        __slots__ = ['code_item', 'gui', 'dependee_code_items']
 
         # noinspection PyMissingConstructor
         def __init__(self, parent: Union[TreeItem, None], code_item: CodeItem, gui):
@@ -4084,12 +4097,13 @@ class Dependee(TreeItem):
 class DependencyModel(QAbstractItemModel):
     """Model for treeview3 to show dependees of a selected code item. This class implements QAbstractItemModel"""
 
+
     def __init__(self, parent: QTreeView, header: str):
         """Class initializer
 
         :param parent: the treeview this model serves
         """
-        super(DependencyModel, self).__init__(parent)
+        super().__init__(parent)
         self.base_header = header
         self.header = header
         self.gui = GUI_SELECT
@@ -4160,7 +4174,7 @@ class DependencyModel(QAbstractItemModel):
         :return:
         """
         if index.isValid():
-            flags = super(DependencyModel, self).flags(index)
+            flags = super().flags(index)
             flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable
             flags ^= Qt.ItemIsUserCheckable
             return flags
@@ -4313,7 +4327,7 @@ class ColorProxyModel(QSortFilterProxyModel):
 
         :param parent: the treeview this model serves
         """
-        super(ColorProxyModel, self).__init__(parent)
+        super().__init__(parent)
         # self.setFilterRole(COLOR)
         self.setDynamicSortFilter(False)
         self.header = header
@@ -4357,7 +4371,7 @@ class ColorProxyModel(QSortFilterProxyModel):
         :return:
         """
         if index.isValid():
-            flags = super(ColorProxyModel, self).flags(index)
+            flags = super().flags(index)
             flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsAutoTristate | Qt.ItemIsUserCheckable
             return flags
         else:
@@ -4407,7 +4421,7 @@ class ColorProxyModel(QSortFilterProxyModel):
         :return: the data as a QVariant
         """
         if index.column() == 0:
-            return super(ColorProxyModel, self).data(index, role)
+            return super().data(index, role)
 
 
 class SelectionProxyModel(QSortFilterProxyModel):
@@ -4421,7 +4435,7 @@ class SelectionProxyModel(QSortFilterProxyModel):
 
         :param parent: the treeview this model serves
         """
-        super(SelectionProxyModel, self).__init__(parent)
+        super().__init__(parent)
         self.setFilterRole(CHECK)
         self.setDynamicSortFilter(True)
         self.header = header
@@ -4448,7 +4462,7 @@ class SelectionProxyModel(QSortFilterProxyModel):
         :return:
         """
         if index.isValid():
-            flags = super(SelectionProxyModel, self).flags(index)
+            flags = super().flags(index)
             flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable
             flags ^= Qt.ItemIsUserCheckable
             return flags
@@ -4503,7 +4517,7 @@ class SelectionProxyModel(QSortFilterProxyModel):
             return NOTHING
         else:
             if index.column() == 0:
-                return super(SelectionProxyModel, self).data(index, role)
+                return super().data(index, role)
 
 
 class TreeModel(QAbstractItemModel):
@@ -4519,7 +4533,7 @@ class TreeModel(QAbstractItemModel):
         :param root_node: the RootItem that contains all item data
         """
 
-        super(TreeModel, self).__init__(parent)
+        super().__init__(parent)
         self.parent = parent
         self.mode = mode
         self.root_item = root_node
@@ -4533,7 +4547,7 @@ class TreeModel(QAbstractItemModel):
         :return:
         """
         if index.isValid():
-            flags = super(TreeModel, self).flags(index)
+            flags = super().flags(index)
             flags |= Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsAutoTristate | Qt.ItemIsUserCheckable
             return flags
         else:
@@ -4741,7 +4755,7 @@ class VQLManagerWindow(QMainWindow):
         :param parent: The owner/parent of the instance
         """
         # initialize main window calling its parent
-        super(VQLManagerWindow, self).__init__(parent, Qt.Window)
+        super().__init__(parent, Qt.Window)
         self.logger = LogWrapper('vqlmanager', _format=LOGGING_FORMAT, level=LOGGING_LEVEL, filename=log_filename)
         self.logger.debug("Start Window creation")
         self.setAttribute(Qt.WA_DeleteOnClose)  # close children on exit
@@ -5056,12 +5070,15 @@ class VQLManagerWindow(QMainWindow):
         tree_view.setUniformRowHeights(True)
         tree_view.setAnimated(True)
 
-        # hack to make horizontal scrollbars appear when needed
+        # hack to make horizontal scrollbars appear when needed << still not working properly
+        tree_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         header = tree_view.header()
+        header.minimumSectionSize = tree_view.width()
+        header.defaultSectionSize = tree_view.width() * 2
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
         header.setStretchLastSection(False)
         header.setResizeContentsPrecision(0)
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        tree_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        tree_view.setColumnWidth(0, tree_view.width())
 
         if tooltip:
             tree_view.setToolTip(tooltip)
